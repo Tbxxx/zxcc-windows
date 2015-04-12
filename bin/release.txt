@@ -1,0 +1,271 @@
+
+I have ported John Elliott's ZXCC to Windows.
+
+In addition, I've generalized it making it a bit less Hitech C oriented.
+
+In a few days it should be on GitHub for anyone who is interested.
+
+My test script so far that runs with no problems is a follows:
+
+time
+erase tlb.com hello.com helloaz.com helloz.com pi.com pi.rel test.rel test.com h
+ello.as hello.obj hello.com temp*
+mbasic test
+m80 helloz,helloz=helloz
+l80 helloz,helloz/n/e
+zxcc helloz
+bascom test,test=test
+ld80 test,obslib/s,test/n/e
+zxcc test
+f80 pi,pi=pi
+ld80 pi,pi/n/e
+zxcc pi
+azcc helloaz
+azas helloaz
+azln helloaz.o libc.lib
+zxcc helloaz
+bdscc hellobds
+bdsclink hellobds
+zxcc hellobds
+htc hello.c
+zxcc hello
+time
+
+Runtime for the entire script is 1.58(!) seconds on a now-ancient 5 year old
+Intel I7-960 processor.  And, please notice, two of the three Microsoft
+links (both requiring large library searches obslib.rel and forlib.rel) are
+done with the notoriously slow ld80 disk-based linker.  I still need to
+add tests for DRI's and SLR's development programs.
+
+Output (slightly edited where noted for brevity concerning repetitive lines):
+
+K:\zxcc2\zxcc-0.5.7\bin>time
+The current time is: 16:46:44.87
+Enter the new time: 
+K:\zxcc2\zxcc-0.5.7\bin>erase tlb.com hello.com helloaz.com helloz.com pi.com pi.rel test.rel test.com hello.as hello.obj hello.com temp* 
+
+K:\zxcc2\zxcc-0.5.7\bin>mbasic test 
+BASIC-80 Rev. 5.21
+[CP/M Version]
+Copyright 1977-1981 (C) by Microsoft
+Created: 28-Jul-81
+39480 Bytes free
+ 1             1 
+ 2             4 
+<count and square to 100 deleted>
+
+K:\zxcc2\zxcc-0.5.7\bin>m80 helloz,helloz=helloz 
+
+No Fatal error(s)
+
+K:\zxcc2\zxcc-0.5.7\bin>l80 helloz,helloz/n/e 
+
+Link-80  3.44  09-Dec-81  Copyright (c) 1981 Microsoft
+
+Data	0100	013E	<   62>
+
+53756 Bytes Free
+[0000	013E	    1]
+
+K:\zxcc2\zxcc-0.5.7\bin>zxcc helloz 
+
+Hello, world from Z-80 assembly.
+
+K:\zxcc2\zxcc-0.5.7\bin>bascom test,test=test 
+
+00000 Fatal Error(s)
+31717 Bytes Free
+
+K:\zxcc2\zxcc-0.5.7\bin>ld80 test,obslib/s,test/n/e 
+
+Link-80  Disk Vers. 3.55  10-Sep-82  Copyright (c) 1981 Microsoft
+
+Data	4000	6406	< 9222>
+
+ BASLIB	RQUEST	
+42626 Bytes Free
+[4015	6406	  100]
+
+
+K:\zxcc2\zxcc-0.5.7\bin>zxcc test 
+ 1             1 
+ 2             4 
+<count and square to 100 deleted - same program as interpreter above>
+
+K:\zxcc2\zxcc-0.5.7\bin>f80 pi,pi=pi 
+$MAIN
+
+K:\zxcc2\zxcc-0.5.7\bin>ld80 pi,pi/n/e 
+
+Link-80  Disk Vers. 3.55  10-Sep-82  Copyright (c) 1981 Microsoft
+
+Data	0103	22A4	< 8609>
+
+44375 Bytes Free
+[0208	22A4	   34]
+
+
+K:\zxcc2\zxcc-0.5.7\bin>zxcc pi 
+
+
+BOUNDS ON PI - DOUBLE PRECISION BINOMIAL THEOREM VERSION
+
+  N     SIDES     SIDE LENGTH     PI - LOWER BOUND   PI- UPPER BOUND
+  3       8.        .765367     3.061467458921     4.959315235374
+  4      16.        .390181     3.121445152258     3.878006734963
+<iteration to 20 deleted>
+
+K:\zxcc2\zxcc-0.5.7\bin>azcc helloaz 
+C Vers. 1.06D 8080  (C) 1982 1983 1984 by Manx Software Systems
+
+K:\zxcc2\zxcc-0.5.7\bin>azas helloaz 
+8080 Assembler Vers. 1.06D
+
+K:\zxcc2\zxcc-0.5.7\bin>azln helloaz.o libc.lib 
+C Linker Vers. 1.06D
+Base: 0100   Code: 1af7  Data: 01ef  Udata: 0250  Total: 001f3a
+
+K:\zxcc2\zxcc-0.5.7\bin>zxcc helloaz 
+Hello, world from Aztec C.
+
+K:\zxcc2\zxcc-0.5.7\bin>bdscc hellobds 
+BD Software C Compiler v1.60  (part I)
+  43K elbowroom
+BD Software C Compiler v1.60 (part II)
+  40K to spare
+K:\zxcc2\zxcc-0.5.7\bin>bdsclink hellobds 
+BD Software C Linker   v1.60
+Last code address: 0E54 
+Externals start at 0E55, occupy 0006 bytes, last byte at 0E5A 
+Top of memory: FE05 
+Stack space: EFAB 
+Writing output...
+  51K link space remaining
+K:\zxcc2\zxcc-0.5.7\bin>zxcc hellobds 
+
+Hello, world from BDS C.
+
+K:\zxcc2\zxcc-0.5.7\bin>htc hello.c 
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+
+K:\zxcc2\zxcc-0.5.7\bin>zxcc hello 
+Hello, world from HiTech C.
+
+K:\zxcc2\zxcc-0.5.7\bin>time
+The current time is: 16:46:46.42
+Enter the new time: 
+
+------------------
+
+For anyone not familiar with ZXCC, it's a pure software C emulator for
+Unix/Linux by John Elliott (i.e. it has no real DRI or other CP/M BDOS
+code) that uses directories in the native file system as disk drives.
+So there is no disk image for files.  This means you can run CP/M programs
+native from the command line just the same as any other Windows program
+e.g. an M80 (Microsoft's Macro-80) assembly, link and test run of a
+program under development ("file") is:
+m80 file,file=file
+l80 file,file/n/e
+zxcc file
+(cpm.exe is also created at build time with a simple copy and is identical
+to zxcc.exe - type the one your most comfortable with)
+
+In this example, m80.exe and l80.exe are created as part of the build script
+of zxcc-windows.  They have to be in your path somewhere and they just
+run.  zxcc is used to run a *.com CP/M program where an *.exe has not been
+created, usually the program under development or some less commonly used
+program.  Note that almost any (no hardware, disk drive or terminal emulation
+dependent) program can just be copied into c:\cpm_com and zxcc/cpm will
+find it and run it with "zxcc program <args...>".  Again, so I don't get
+complaints right now, there is no terminal emulation in zxcc-windows yet.
+The first release is intended for non-terminal development programs that
+are usually TTY I/O based.  This will probably change in the not-too-distant
+future.  If you like the extra features, zxcc-windows should port easily
+back to Linux by the use of John Elliott's cpmio library with relatively
+little effort and full source code of zxcc-windows is included in the package.
+Right now, simple Windows TTY I/O is used with the exception of kbhit()
+for console status.
+
+The following programs are created during the build process with the
+CP/M binary embedded in the *.exe file.  Obviously, the file must be in
+your PATH and any support programs in c:\cpm_com\microsoft, c:cpm_com\aztec_c,
+etc.  Both source and binary form are included for all programs for those
+that only want to use the package.  However, adding new *.exe files is not
+difficult along with a support files directory if needed.  It does require
+recompilation.  To eliminate that necessity, I probably should read the
+data referencing program prefixes, names and support directories from an
+ini or cfg file, but that's for a later release.
+
+Programs provided as *.exe native Windows files:
+Microsoft - M80, F80, mbasic, obasic, bascom, l80, ld80, m80new
+(Werner Cirsovius' enhanced M80 - the assembly and name are mine),
+cref, lib80 - support files (e.g. baslib.rel obslib.rel, forlib.rel, brun.com,
+bcload, etc. are in c:\cpm_com\microsoft
+
+DRI - mac, rmac, link, lib - link.com and lib.com are prefaced with "dri"
+as MingW can have problems with programs named "link" or "lib" adding
+code when it's not wanted or needed.  - support files e.g. *.lib macros
+are in c:\cpm_com\dri
+
+Aztec C - All programs - names are prefaced with "az" - support files e.g.
+stdio.h, libc.h, libc.lib are in c:\cpm_com\aztec_c
+
+BDS C -  All programs - names are prefaced with "bds" -  support files
+e.g. cc2.com bdscio.h deff*.crl are in c:\cpm_com\bds_c
+
+SLR Systems - All programs - names are prefaced with "slr" - support
+files are in c:\cpm_com\slr
+
+Hitech C - All programs - names are prefaced with "ht" - e.g linq.com
+(avoid link.com), p1.com, cgen.com, zas.com, etc. are in
+c:\cpm_com\hitech_c.
+Note - the compiler works both as individual programs prefaced with
+"ht" e.g. htzas.exe or with the integrated c.com (htc.com in zxcc-windows).
+"htc hello.c" will automate the entire multipass compilation, assembly
+and link leave hello.com ready to run with zxcc.
+
+Microshell V2 - called "msh" - support programs e.g. sh.ovl are in
+c:cpm_com\other. "exit" to quit.
+
+ZCPR1 - "zcpr" - no support directory, it just runs. "exit" to quit.
+
+DRICCP - "driccp" - no support directory, it just runs. "exit" to quit.
+
+The reason for the automated search for support files by company/product
+is so multiple programs that use the same filenames (e.g. stdio.h, libc.lib
+and the like) can all peacefully coexist and not interfere with each
+other.
+
+Any others needed as native *.exe files?  I'm a BASIC, 8080/Z80 assembly
+and C person, so these programs are what I use most.
+
+It runs several programs that fail on both Mr. Dantas' and Mr. Takeda's
+emulators.  They use a very simplistic FCB handlng code that does an
+fopen for each access e.g. create (OK, so I used an 'e' for create, it's
+actually F_MAKE in DRI-ese - creat in Unix-ese), open, close, seek,
+read/write random, read/write sequential or whatever.  The bad news is
+many programs (especially DRI - Kildall knew what his BDOS would and
+wouldn't do) play games with FCB data.  So it must be saved and used
+on-the-fly if programs don't follow the strict letter of the law.  Also,
+to run DRI's link.com, lots of non-documented stuff is done to make it
+run faster.  John Elliott worked all this out.  See his comments in the
+source code (his and mine) for details.
+
+I'm working with Marcelo Dantas on his by doing his testing for him to
+see if his can't improve the FCB handling to bring more programs on board.
+I've never been in contact with Mr. Takeda and it's entirely possible this
+kind of low-level detail is beyond the scope of what his intentions are.
+I dunno.
+
+I'll let comp.os.cpm know when it's posted.  I'm new to GitHub, so there
+may be a bit of a learing curve to climb.
+
+No guarantees, of course, and some things may be impossible in pure C with
+no BDOS, but I'll certainly take a look at it if your pet program
+doesn't run.
+
+Give me a few days to make sure DRI and SLR programs work.
+
+Tom
+

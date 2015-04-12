@@ -1,0 +1,8 @@
+	org 100h
+start:
+	nop
+	nop
+	nop
+	jp start
+	end
+

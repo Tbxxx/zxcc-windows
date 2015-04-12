@@ -1,0 +1,32 @@
+;This is an example of the "Hello World" program.
+;Uses z80 assembler mnemonics.
+;Intended for slr180 assembler as posted in source code
+;by Werner Cirsovious.
+;Uses z80 mnemonics by default
+;Absolute code mode
+
+bdos	equ 5	; address of BDOS call
+conout	equ 2	; console output function
+reset	equ 0	; warm start BDOS function
+
+	org 100h ;cpm programs start address.
+
+	ld hl, datastr		;HL = address of string.
+loop1: ld a, (hl)		;loop through datastr
+	or a				;set cpu flags.
+	jp z,gone			;if char = 0 done.
+	ld e, a 			;E = char to send.
+	ld c, conout 		;we want BDOS func 2.
+	push hl 			;save HL register.
+	call bdos 			;call BDOS function.
+	pop hl 				;restore HL register
+	inc hl 				;point to next char.
+	jp loop1 			;do next char.
+;Exit and return code
+gone: ld	c, reset	; bdos exit
+	call bdos;
+; never gets here
+;Data to send to console
+datastr: DB 13,10,'Hello, world from SLR180 Z-80 assembly.',13,10,0
+	end
+

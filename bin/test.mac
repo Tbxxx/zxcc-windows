@@ -1,0 +1,11 @@
+.Z80
+ASEG
+	ORG 0100h
+start:
+	nop
+	nop
+	nop
+	nop
+	jp start
+	end
+

@@ -1,0 +1,3067 @@
+	title	SLR Fast Z80 Assembler
+	name	('SLR180')
+
+; DASMed version of the SLR180.COM assembler
+; By W. Cirsovius
+
+	aseg
+	org	0100h
+
+NO	equ	0
+YES	equ	NOT NO
+
+FALSE	equ	NO
+TRUE	equ	YES
+
+@RUN@	equ	TRUE		;; If we bypass mystery code
+;;@RUN@	equ	FALSE		;; If we run mystery code
+
+OS	equ	0000h
+BDOS	equ	0005h
+FCB	equ	005ch
+CCP	equ	0080h
+TPA	equ	0100h
+
+.conin	equ	  1
+.conout	equ	  2
+.lstout	equ	  5
+.dircon	equ	  6
+.rdcon	equ	 10
+.consta	equ	 11
+.vers	equ	 12
+.setdsk	equ	 14
+.open	equ	 15
+.close	equ	 16
+.delete	equ	 19
+.rdseq	equ	 20
+.wrseq	equ	 21
+.make	equ	 22
+.retdsk	equ	 25
+.setdma	equ	 26
+.usrcod	equ	 32
+.mulsec	equ	 44
+.rdstmp	equ	102
+.getTOD	equ	105
+.prgret	equ	108
+;
+.DetCon	equ	147		; MP/M detache functions
+.DetLst	equ	159
+
+_get	equ	-1
+
+OSerr	equ	255
+
+CPM3	equ	30h
+
+_CPM	equ	0
+_CPM_	equ	1
+_MPM	equ	2
+
+_MPMoff	equ	6		; MP/M file offset
+
+_MBP	equ	0022h		; ZCPR message pointer
+_MEP	equ	    6		; Pointer to error message
+
+_NOER@	equ	0		; CP/M+ normal return
+_ERR@	equ	0ff00h		; CP/M+ error return
+
+@SEC@	equ	8		; Default sector count
+
+FCBlen	equ	33
+FCBlenr	equ	FCBlen+3
+@drv	equ	1
+@nam	equ	8
+@ext	equ	3
+
+_EXT	equ	12
+_CR	equ	32
+
+C$AStmp	equ	24		; Create/access time stamp
+UpStmp	equ	28		; Update time stamp
+
+TODlen	equ	  4		; Short form
+$TODlen	equ	 16		; Long form
+RecLng	equ	128
+CmdLen	equ	128
+
+null	equ	00h
+tab	equ	09h
+lf	equ	0ah
+ff	equ	0ch
+cr	equ	0dh
+eof	equ	1ah
+esc	equ	1bh
+del	equ	7fh
+eot	equ	-1
+
+_FULL	equ	0
+_PASS	equ	1
+_SYM	equ	2
+_CROSS	equ	3
+_UNDEF	equ	4
+_NOUPP	equ	5
+_HEX	equ	6
+_REL	equ	7
+
+@C.P@	equ	(1 SHL _CROSS) + (1 SHL _PASS)
+@C.F@	equ	(1 SHL _CROSS) + (1 SHL _FULL)
+@P.F@	equ	(1 SHL _PASS)  + (1 SHL _FULL)
+@R.U@	equ	(1 SHL _REL)   + (1 SHL _UNDEF)
+
+_JR.NC	equ	030h
+_JP	equ	0c3h
+_RST.0	equ	0c7h
+_RET	equ	0c9h
+_CALL	equ	0cdh
+
+_IXprfx	equ	0ddh
+_IYprfx	equ	0fdh
+
+PC.ABS	equ	0100h
+PC.REL	equ	0000h
+
+ColMask	equ	00000111b
+RecMask	equ	00000111b
+LoMask	equ	00001111b
+MSB	equ	10000000b
+NoMSB	equ	01111111b
+ALL	equ	11111111b
+
+@MSB	equ	7
+
+ColTab	equ	8
+
+MinWid	equ	20		; Min terminal width requested
+MaxWid	equ	80		; Max terminal width
+
+;
+; Macro for serial number
+;
+serial:
+	db	'F*KSLR'
+
+_GO	macro
+	nop
+	endm
+
+;
+; Macro for CmpToken
+;
+ld.bc	macro	v1,v2
+	ld	bc,v1*256+v2
+	endm
+;
+; Macro for _rPage_
+;
+ld.hl	macro	v1,v2
+	ld	hl,v1*256+v2
+	endm
+
+
+val.adr	macro	val,adr
+	db	val
+	dw	adr
+	endm
+
+l0000	equ	00h
+l0001	equ	01h
+l0002	equ	02h
+l0003	equ	03h
+l0004	equ	04h
+l0005	equ	05h
+l0006	equ	06h
+l0007	equ	07h
+l0008	equ	08h
+l0009	equ	09h
+l000a	equ	0ah
+l000b	equ	0bh
+l000c	equ	0ch
+l000d	equ	0dh
+l000e	equ	0eh
+l000f	equ	0fh
+l0011	equ	11h
+l0013	equ	13h
+l0014	equ	14h
+l0015	equ	15h
+l0016	equ	16h
+l0017	equ	17h
+l001c	equ	1ch
+l001e	equ	1eh
+l0020	equ	20h
+l0027	equ	27h
+l002b	equ	2bh
+l002d	equ	2dh
+l002f	equ	2fh
+l0032	equ	32h
+l0037	equ	37h
+l003f	equ	3fh
+l0040	equ	40h
+l0043	equ	43h
+l0044	equ	44h
+l0045	equ	45h
+l0047	equ	47h
+l004c	equ	4ch
+l0050	equ	50h
+l0076	equ	76h
+l0077	equ	77h
+l007f	equ	7fh
+l00b2	equ	0b2h
+l00c2	equ	0c2h
+l00d9	equ	0d9h
+l00f3	equ	0f3h
+l00fb	equ	0fbh
+
+l0100	equ	0100h
+l0200	equ	0200h
+l0500	equ	0500h
+
+l8e1e	equ	8e1eh
+
+l94b0	equ	94b0h
+
+laf5f	equ	0af5fh
+lb73e	equ	0b73eh
+lc34c	equ	0c34ch
+ldd1e	equ	0dd1eh
+leb23	equ	0eb23h
+lef51	equ	0ef51h
+lf105	equ	0f105h
+lf403	equ	0f403h
+lf71e	equ	0f71eh
+lfa1e	equ	0fa1eh
+lfb00	equ	0fb00h
+lfc18	equ	0fc18h
+lfe93	equ	0fe93h
+lff00	equ	0ff00h
+lfff2	equ	0fff2h
+lfff8	equ	0fff8h
+lfffd	equ	0fffdh
+lffff	equ	0ffffh
+
+IF	@RUN@
+	jp	MAIN_
+ELSE
+	jp	MAIN
+ENDIF	; @RUN@
+
+Z3ENV:
+	db	'Z3ENV'
+	db	1
+ZENV:
+	dw	0
+;
+	dw	131h		;; RELEASE 1.31
+;
+; Copied to _CON.COL_
+;
+$CON.COL$:
+	db	0		; Current console width
+	db	80		; Page width
+	db	60		; Page length
+	db	11000000b	; Special bits
+$FOUR$:
+	db	YES		; NO is list up to four bytes
+	db	NO		; NO is no list of false conds.
+	db	NO		; NO is no FF at start of list
+	db	2		; Macro list option
+	db	NO		; NO is generate 6 REL-bytes
+	db	NO		; NO is INTEL address mode
+;
+; ->>>>> DONE
+;
+$SUPPR$:
+	db	NO		; YES Suppress PAGE, TITLE
+$EI$:
+	db	NO		; NO is no interrupt fix
+$FF.SUM$:
+	db	YES		; YES if FF before summary
+$FF.EOL$:
+	db	YES		; YES if FF at end of pass
+$TOD.ENA$:
+	db	YES		; YES is TOD enable
+$TOD.LOAD$:
+	db	NO		; NO is load TOD from data
+$TOD.DATA$:
+	dw	0010h		; Execution address or data
+$TOD.FORM$:
+	db	NO		; NO is short format
+$MULS$:
+	db	YES		; NO is one sector
+$LIN.NR$:
+	db	NO		; YES use # instead of line#
+$PR.LINNR$:
+	db	YES		; YES prints line# first
+$NUMER$:
+	db	100		; Error count for abort
+$CONPAG$:
+	db	24		; Console page length
+$HEXOUT$:
+	db	32		; Bytes in HEX line
+$CLOSE$:
+	db	NO		; YES is Close and ReOpen
+$LABEL$:
+	db	YES		; YES is label in 1st column
+$COND$:
+	db	NO		; YES for bit 0 check only
+$NO.IF1$:
+	db	YES		; YES ignore IF errs in pass 1
+$IF.SPC$:
+	db	YES		; YES ignore IF spaces
+$FILL.0$:
+	db	NO		; NO fills unused space with 0
+$EMP.CHN$:
+	db	NO		; YES forces empty ext chain
+$ASEG$:
+	db	NO		; YES default ASEG to 0000H
+$ORG.ABS$:
+	db	NO		; YES is offset in ABS
+$COMM.0$:
+	db	NO		; YES COMMON back to 0000H
+$TMP.DRV$:
+	db	0		; Temporary drive (0 is curent)
+@SYSUSR@:
+	db	0		; Alternate system user
+$ERASE$:
+	db	NO		; YES is erase $$$.SUB on end
+$MS.DOS$:
+	db	NO		; YES is MS DOS emulator in use
+$TAB.STR$:
+	db	NO		; YES is allow tabs in strings
+$NEST$:
+	db	NO		; YES is print nesting level
+$EIGHT$:
+	db	YES		; NO is eight bits, else seven
+$$180:
+	db	'MAC'		; Source file extension
+$$REL:
+	db	'REL'		; Rel file extension
+$$COM:
+	db	'COM'		; Abs binary file extension
+$$HEX:
+	db	'HEX'		; INTEL hex file extension
+$$LST:
+	db	'LST'		; List file extension
+$$$$1:
+	db	'$$1'		; Temp file extension
+$$SUB:
+	db	'SUB'		; /I file extension
+$$MAC:
+	db	'LIB'		; MACLIB extension
+$LEAD$:
+	db	esc,'Q'		; Leader string to printer
+	ds	6,eot
+$TRAIL$:
+	db	esc,'N'		; Trailer string to printer
+	ds	6,eot
+;
+	db	'Copyright (c) 1985-86 by SLR Systems, Butler PA'
+l01a7:
+	db	13,'Extra Operand'
+l01b5:
+	db	-1
+@ZERR:
+	dw	@SERR		; Pointer to error
+l01b8:
+	dw	l04e7		; Err  0
+	dw	l01a7		; Err  1
+	dw	l038d		; Err  2
+	dw	l03a0		; Err  3
+	dw	l03b0		; Err  4
+	dw	l03c0		; Err  5
+l01c4:
+	dw	l03cb		; Err  6
+	dw	l03dc		; Err  7
+	dw	l04f4		; Err  8
+	dw	l0506		; Err  9
+	dw	l0506		; Err 10
+	dw	l051b		; Err 11 --
+	dw	l052c		; Err 12
+	dw	l0545		; Err 13
+	dw	l0556		; Err 14
+	dw	l0565		; Err 15
+	dw	l0574		; Err 16
+	dw	l0585		; Err 17
+	dw	l0592		; Err 18
+	dw	l05a0		; Err 19
+	dw	l05ab		; Err 20 --
+l01e2:
+	dw	l05ab		; Err 21
+	dw	l05b9		; Err 22
+	dw	l05c7		; Err 23
+	dw	l05d6		; Err 24
+	dw	l05e4		; Err 25 --
+	dw	l05f1		; Err 26
+	dw	l05fe		; Err 27 --
+	dw	l060d		; Err 28
+	dw	l061b		; Err 29
+	dw	l063d		; Err 30
+	dw	l0659		; Err 31
+	dw	l0665		; Err 32
+	dw	l0670		; Err 33
+	dw	0,0
+;
+; Control table **MUST** start at page boundary due to indexing
+;
+CtrlArr:
+;
+; ASCII control
+;
+	db	09bh,051h,051h,051h	; 00 .. 03
+	db	051h,051h,051h,051h	; 04 .. 07
+	db	051h,09ch,09dh,09dh	; 08 .. 0B
+	db	09dh,09bh,051h,051h	; 0C .. 0F
+	db	051h,051h,051h,051h	; 10 .. 13
+	db	051h,051h,051h,051h	; 14 .. 17
+	db	051h,051h,0a0h,051h	; 18 .. 1B
+	db	051h,051h,051h,051h	; 1C .. 1F
+;
+; ASCII printable
+;
+	db	09ch,033h,09fh,034h	;  !"#
+	db	058h,057h,03fh,09eh	; $%&'
+	db	055h,052h,03ch,03ah	; ()*+
+	db	050h,03bh,05ah,03dh	; ,-./
+	db	05ch,05dh,05eh,05fh	; 0123
+	db	060h,061h,062h,063h	; 4567
+	db	064h,065h,032h,09dh	; 89:;
+	db	053h,049h,054h,059h	; <=>?
+	db	05bh,066h,067h,068h	; @ABC
+	db	069h,06ah,06bh,06ch	; DEFG
+	db	06dh,06eh,06fh,070h	; HIJK
+	db	071h,072h,073h,074h	; LMNO
+	db	075h,076h,077h,078h	; PQRS
+	db	079h,07ah,07bh,07ch	; TUVW
+	db	07dh,07eh,07fh,055h	; XYZ[
+	db	051h,052h,0a1h,09ah	; \]^_
+	db	051h			; `
+;
+; Set to default or 80h..99h on conversion request
+;
+	db	066h,067h,068h,069h	; abcd
+	db	06ah,06bh,06ch,06dh	; efgh
+	db	06eh,06fh,070h,071h	; ijkl
+	db	072h,073h,074h,075h	; mnop
+	db	076h,077h,078h,079h	; qrst
+	db	07ah,07bh,07ch,07dh	; uvwx
+	db	07eh,07fh,055h,040h	; yz{|
+	db	052h,044h,09bh		; }~<DEL>
+;
+; ASCII source line
+;
+$SRCline$:
+	ds	RecLng
+;
+; Control table **MUST** start at page boundary due to indexing
+; Processes prefixed tokens
+;
+l0300:
+TokenTab:
+	dw	@OPER.1		; 53 : <
+	dw	@OPER.2		; 54 : >
+	dw	@PAREN		; 55 : (, [, {
+	dw	@STRG.1		; 56 : " (mapped)
+	dw	@LABEL		; 57 : %
+	dw	@PC.REF		; 58 : $
+	dw	@LABEL		; 59 : ?
+	dw	@PS.OP		; 5A : .
+	dw	@LABEL		; 5B : @
+	dw	@ZERO		; 5C : 0
+	dw	@NUMB		; 5D : 1
+	dw	@NUMB		; 5E : 2
+	dw	@NUMB		; 5F : 3
+	dw	@NUMB		; 60 : 4
+	dw	@NUMB		; 61 : 5
+	dw	@NUMB		; 62 : 6
+	dw	@NUMB		; 63 : 7
+	dw	@NUMB		; 64 : 8
+	dw	@NUMB		; 65 : 9
+	dw	@LET.A		; 66 : A
+	dw	@LET.B		; 67 : B
+	dw	@LET.C		; 68 : C
+	dw	@LET.D		; 69 : D
+	dw	@LET.E		; 6A : E
+	dw	@LABEL		; 6B : F
+	dw	@LET.G		; 6C : G
+	dw	@LET.H		; 6D : H
+	dw	@LET.I		; 6E : I
+	dw	@LET.J		; 6F : J
+	dw	@LABEL		; 70 : K
+	dw	@LET.L		; 71 : L
+	dw	@LET.M		; 72 : M
+	dw	@LET.N		; 73 : N
+	dw	@LET.O		; 74 : O
+	dw	@LET.P		; 75 : P
+	dw	@LABEL		; 76 : Q
+	dw	@LET.R		; 77 : R
+	dw	@LET.S		; 78 : S
+	dw	@LET.T		; 79 : T
+	dw	@LABEL		; 7A : U
+	dw	@LET.V		; 7B : V
+	dw	@LABEL		; 7C : W
+	dw	@LET.X		; 7D : X
+	dw	@LABEL		; 7E : Y
+	dw	@LET.Z		; 7F : Z
+	dw	@LABEL		; 80 : a
+$END.PASS:
+	db	'End of file Pass '
+$PASS:
+	db	'1',cr,lf,eot
+;
+; Opcode execution table - indexed by type of op code
+;
+OpExTab:
+	dw	jp.ind.r	;  0	Special code
+	dw	l2b01		;  1	One byte opcode
+	dw	l2b05		;  2	Two byte opcode
+	dw	l2b0a		;  3	CALL
+	dw	l2b2d		;  4	Shift codes
+	dw	l2b52		;  5	Math codes 8 and 16 bit
+	dw	l2bbe		;  6	Math codes 8 and 16 bit
+	dw	l2bfc		;  7	Math and logical codes
+	dw	l2c00		;  8	Bit codes
+	dw	l2c30		;  9	DEC and INC codes
+	dw	l2c5e		; 10	JP
+	dw	l2c8e		; 11	POP and PUSH code
+	dw	l2caa		; 12	Set variable TRUE
+	dw	l2cb2		; 13	Set variable FALSE
+l038d:
+	db	18,'Previously Defined'
+l03a0:
+	db	15,'Symbol Expected'
+l03b0:
+	db	15,'Bad Dummy Param'
+l03c0:
+	db	10,'Bad Opcode'
+l03cb:
+	db	16,'Illegal - 0 Used'
+l03dc:
+	db	25,'No Backing Up in COM File'
+@SERR:
+	ds	10
+l0400:
+	ds	16
+	ds	6,MSB
+	db	0
+	ds	18,MSB
+	ds	21,0
+	db	MSB
+	ds	3,0
+	ds	3,MSB
+	db	0
+	ds	2,MSB
+	db	0
+	ds	7,MSB
+	ds	8,0
+	ds	143,MSB
+l04e7::
+	db	12,'Syntax Error'
+l04f4:
+	db	17,'Byte Out of Range'
+l0506:
+	db	20,'Intermediate Corrupt'
+l051b:
+	db	16,'Expression Error'
+l052c:
+	db	24,'Illegal in Absolute File'
+l0545:
+	db	16,'Too Many Commons'
+l0556:
+	db	14,'File Not Found'
+l0565:
+	db	14,'Missing .PHASE'
+l0574:
+	db	16,'Missing .DEPHASE'
+l0585:
+	db	12,'Missing ENDM'
+l0592:
+	db	13,'Missing MACRO'
+l05a0:
+	db	10,'Missing IF'
+l05ab:
+	db	13,'Missing ENDIF'
+l05b9:
+	db	13,'Bad File Name'
+l05c7:
+	db	14,'Comma Expected'
+l05d6:
+	db	13,'String Syntax'
+l05e4:
+	db	12,''')'' Expected'
+l05f1:
+	db	12,'''/'' Expected'
+l05fe:
+	db	14,'Unexpected EOF'
+l060d:
+	db	13,'Line Too Long'
+l061b:
+	db	33,'), Bin-Op, or End of Exp Expected'
+l063d:
+	db	27,'ID, (, or Unary Op Expected'
+l0659:
+	db	11,'Macro Redef'
+l0665:
+	db	10,'Bad Number'
+l0670:
+	db	9,'Missing :'
+$FF:
+	db	cr,ff,eot
+l067d:
+	db	tab,tab,'  '
+l0681:
+	call	l0dbc
+	jr	l06be
+l0686:
+	call	l07ee
+	jr	.ProcSRC
+l068b::
+	call	l07f1
+	jr	.ProcSRC
+;
+; Process source file
+;
+ProcSRC:
+	ld	(SRC.stk),sp	; Save entry stack
+.ProcSRC:
+	xor	a
+	ld	(l6840),a	; Clear a bit
+	call	GetLine		; Read line, get tokens
+	xor	a
+	ld	(l684d),a
+	ld	(l6879),a
+	ld	(l688b),a
+	ld	(l6865),iy
+	ld	hl,(TokPtr)	; Get token pointer
+	inc	hl
+	ld	a,(hl)		; Get token
+	cp	35h		; Test space
+	jr	z,l06b7		; .. yeap
+	ld	a,-1
+	ld	(l688b),a
+l06b7:
+	call	l0dbc
+	cp	38h		; Test ???
+	jr	z,l0681
+l06be:
+	cp	39h		; .. or ????
+	jr	z,l06c8
+	cp	36h		; .. or new line
+	jr	z,l0686
+	jr	l06d0
+l06c8:
+	ld	a,(hl)
+	cp	0f0h
+	jr	nz,l072f
+	ld	(l68a2),hl
+l06d0:
+	push	bc
+	ld	hl,(TokStrt)	; Get token start pointer
+	push	hl
+	call	l0dca		; .. process ???
+	ld	(l6877),hl
+	cp	39h		; Test ???
+	jr	z,l06f9
+	ld	(l6879),a	; .. save token
+	cp	32h		; Test :
+	jr	z,l0700
+	cp	0b8h		; .. MACRO
+	jr	z,l0700
+	cp	0b3h		; .. EQU
+	jr	z,l0700
+	cp	0aah		; .. ASET
+	jr	z,l0700
+l06f2:
+	pop	hl
+	pop	bc
+	ld	hl,(l68a2)
+	jr	l076d
+l06f9:
+	ld	a,-1
+	ld	(l6879),a
+	jr	l06f2
+l0700:
+	pop	de		; Get back pointer
+	pop	hl		; .. and token
+	ld	a,(l687c)
+	or	a
+	jr	nz,l072f
+	dec	a
+	ld	(l688b),a
+	ld	a,l
+	cp	39h		; Test special
+	ld	hl,(l68a2)
+	jr	z,l072f		; .. yeap
+	ld	l,a		; Set index
+	xor	a
+	ld	(l6879),a
+;	ld	h,HIGH l0400
+;	bit	7,(hl)		; Test bit
+;	jp	z,l07c5		; .. nope
+	ld	a,(de)
+	cp	57h		; Test range
+	jp	c,l07c5		; .. letters
+	set	6,(hl)		; Set bit
+	ex	de,hl
+	ld	(TokStrt),hl	; Set token start pointer
+	call	GetLabel	; Get label
+l072f:
+	ld	(l684b),hl
+	ld	(l684e),iy
+	ld	a,($REL$)	; Get REL mode
+	ld	(l684d),a
+	call	l0dbc
+	cp	32h		; Test :
+	jr	nz,l0768
+	ld	a,-1
+	ld	(l688b),a
+	call	l0dbc
+	cp	32h		; .. 2nd :
+	jr	nz,l0768
+	ld	a,(l687c)
+	or	a
+	jr	nz,l0765	; .. nope
+	ld	hl,(l684b)
+	ld	a,(hl)
+	cp	0f0h
+	jr	nz,l0762
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+l0762:
+	call	l431a
+l0765:
+	call	l0dbc
+l0768:
+	cp	36h		; Test new line
+	jp	z,l0686		; .. yeap
+l076d:
+	ld	a,(l687c)
+	or	a
+	ld	a,c		; Get token
+	jr	z,l0794
+	cp	0b5h		; .. test IF
+	jr	z,l078f
+	cp	0aeh		; .. ?????
+	jr	z,l0794
+	cp	0b0h		; .. ENDIF
+	jr	z,l0794
+	cp	0d6h		; .. range
+	jr	c,l0788
+	cp	0e0h		; .. range
+	jr	c,l078f
+l0788:
+	cp	37h		; Test end of file
+	call	z,EndOfFile	; .. process it
+	jr	l07bf
+l078f:
+	call	l4567
+	jr	l07bf
+l0794:
+	cp	39h		; Test ???
+	jr	nz,l07a0
+	ld	a,(hl)
+	cp	0f0h
+	jp	z,l309e
+	jr	l07d4
+l07a0:
+	sub	58h		; Strip off offset
+	cp	0e6h-58h+1	; .. test range
+	jr	nc,l07d4	; .. no opcode
+	ld	c,a
+	ld	b,0
+	ld	hl,OpCodTab	; Get opcode table
+	add	hl,bc		; Get index *3
+	add	hl,bc
+	add	hl,bc
+	ld	a,(hl)		; .. fetch type as index
+	inc	hl
+	ex	de,hl
+	add	a,a		; .. *2
+	ld	c,a
+	ld	hl,OpExTab
+	add	hl,bc		; Point to entry
+	ld	a,(hl)		; Fetch address
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	call	jp.r.1		; .. execute
+l07bf:
+	call	l07eb
+	jp	.ProcSRC	; .. loop
+l07c5:
+	ld	c,3
+l07c7:
+	ld	hl,0
+	ld	(l684b),hl
+	jp	ERROR
+l07d0:
+	ld	c,2
+	jr	l07c7
+l07d4:
+	ld	a,c		
+	cp	3ch		; Test * prefix
+	jr	nz,l07e0
+	call	.PartToken	; Get token
+	cp	0bfh		; Test EJECT
+	jr	z,l07a0		; .. ok
+l07e0:
+	ld	a,c
+	cp	37h		; Must be end of file
+	call	z,EndOfFile
+	ld	c,5
+	jp	ERROR
+l07eb:
+	call	l07f4
+l07ee:
+	call	l0817
+l07f1:
+	jp	l63c5
+l07f4:
+	ld	a,(l687c)
+	or	a
+	ret	nz
+	ld	a,(l6840)
+	or	a
+	ld	c,24
+	call	nz,.ERROR
+	ld	hl,(TokPtr)	; Get token pointer
+	ld	a,(hl)
+	cp	'6'
+	ret	z
+	call	.PartToken
+	cp	'6'
+	ret	z
+	cp	'7'
+	ret	z
+	ld	c,1
+	jp	.ERROR
+l0817:
+	ld	hl,(l684b)
+	ld	a,h
+	or	l
+	ret	z
+	ld	a,(l687c)
+	or	a
+	jr	nz,l088f
+	ld	a,(l684d)
+	cp	0f0h
+	jr	nz,l082f
+	cp	(hl)
+	jr	z,l088f
+	jr	l085c
+l082f:
+	call	l435d
+	or	a
+	jp	m,l0841
+	and	0fh
+	cp	0fh
+	jr	nz,l085c
+	ld	(hl),0
+	inc	a
+	jr	l084d
+l0841:
+	push	hl
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	hl,(l684e)
+	or	a
+	sbc	hl,de
+	pop	hl
+l084d:
+	jr	z,l085c
+	push	hl
+	ld	c,2
+	call	.ERROR
+	pop	hl
+	ld	a,(Pass)	; Get pass
+	or	a
+	jr	z,l088f		; .. 1st pass
+l085c:
+	ld	a,(l684d)
+	ld	c,a
+	ld	a,(hl)
+	and	0f0h
+	or	80h
+	or	c
+	ld	(hl),a
+	ld	(l684b),hl
+	ld	(l684d),a
+	inc	hl
+	ld	de,(l684e)
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ld	a,(l688b)
+	or	a
+	jr	nz,l0884
+	ld	a,($LABEL$)	; Test label in 1st column
+	or	a
+	ld	c,33
+	call	nz,.ERROR	; .. error if so
+l0884:
+	ld	a,(Pass)	; Get pass
+	dec	a
+	jr	nz,l088f	; .. not 1st pass
+	ld	hl,(l684b)
+	set	4,(hl)
+l088f:
+	ld	hl,0
+	ld	(l684b),hl
+	ret
+;
+;
+;
+l0896:
+	call	l08af
+	ld	hl,l691f
+	call	PrStrg		; Print
+	ld	a,(l07f1)
+	cp	_RET
+	ld	hl,$SRCline$	; Get line
+	jr	nz,l08ac
+	ld	hl,l090b	; .. new line if RET
+l08ac:
+	jp	PrStrg		; Print
+;
+; Print line if printer enabled
+;
+l08af:
+	ret
+	ld	hl,l668f
+	inc	(hl)		; Bump page count
+	ld	a,(_LST.PAG_)	; Get max
+	cp	(hl)
+	ret	nc		; .. not yet reached
+	ld	(hl),3		; .. init for header
+	ld	hl,_FF_
+	ld	a,(hl)		; Test form feed at start
+	or	a
+	jr	nz,l08c5	; .. yeap
+	dec	(hl)
+	jr	l08cb
+l08c5:
+	ld	hl,$FF
+	call	PrStrg		; Print form feed
+l08cb:
+	ld	hl,l63eb
+	call	PrStrg		; Print
+	ld	hl,l6a6e
+	call	PrStrg		; Print
+	ld	a,($TOD.ENA$)	; Test TOD to be inserted
+	or	a
+	jr	z,l08e6		; .. nope
+	call	Get$TOD		; Get ASCII format
+	ld	hl,$TOD$
+	call	PrStrg		; Print time and date
+l08e6:
+	ld	hl,l680a+2
+	call	IncBCD		; Increment value
+	ld	hl,l680b
+	ld	a,3
+	ld	de,l29c1
+	call	BCDtoASC.	; Convert to ASCII
+	ld	hl,l29b0
+	call	PrStrg		; Print
+	ld	hl,@MES@
+	call	PrStrg		; Print message
+	ld	hl,l0909
+	jp	PrStrg		; Print
+l0909:
+	db	cr,lf
+l090b:
+	db	cr,lf,eot
+;
+; Jump via register
+; ENTRY	Reg HL holds address to be executed
+;
+jp.r.1:
+	jp	(hl)
+;
+; Process error
+; ENTRY	Reg C holds error number
+;
+.ERROR:
+	ld	hl,l01b8	; Get error table
+	ld	b,0
+	add	hl,bc
+	add	hl,bc		; .. get index
+	ld	a,(hl)		; Fetch address
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	jp	ERROR?		; .. process it on pass 2
+;
+; Most frequented error : Syntax Error
+;
+SyntaxErr:
+	ld	c,0
+ERROR:
+	call	.ERROR
+l0922:
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token
+	ld	sp,(SRC.stk)	; Get entry stack
+	call	l07ee
+	jp	.ProcSRC	; .. get next
+;
+; *********************************
+; *** ENTRY OF HARD WORKING SLR ***
+; *********************************
+;
+GO.SLR::
+	ld	hl,_OPT_	; Get option
+	ld	a,(hl)
+	and	@C.P@		; Mask list bits
+	cp	@C.P@
+	ld	a,(hl)
+	jr	nz,l0940	; Not cross ref on one pass
+	xor	@P.F@		; Toggle mode
+	ld	(hl),a
+l0940:
+	and	@C.F@		; Test list again
+	jp	nz,l0a42	; .. cross ref or full
+	ld	a,2
+	ld	(Pass),a	; Set one pass only
+	ld	a,_RET
+	ld	($CrsEna),a	; Disable cross reference
+	ld	hl,l1310
+	call	Set.jp.tab	; Init jump table
+	call	EnaXXX?		; .. another one
+	ld	a,(_OPT_)
+	and	1 SHL _PASS	; Test one pass
+	jr	nz,l0962	; .. yeap
+	call	DisXXX?		; Disable ????
+l0962:
+	call	ProcSRC		; Process source file
+	call	SetFileTab	; Set file table
+	call	DisXXX?		; Disable ????
+	ld	hl,Pass
+	inc	(hl)		; Bump pass
+	call	l5086
+l0972:
+	ld	a,eot
+	ld	(@MES@),a	; .. set no message
+	call	EnaXXX?		; Init jump table
+	call	l5b64
+	call	l0bdf
+	jp	EndOfASM	; .. that's it
+;
+; Disable ?????
+;
+DisXXX?:
+	ld	a,_RET		; Set immediate return
+	ld	(l08af),a
+	ld	hl,l137f
+	ld	de,l63bf
+	ld	bc,l1394-l137f
+	ldir
+	ret
+;
+;
+;
+l0994:
+	ld	a,(hl)
+	ld	(hl),0
+	inc	hl
+	or	(hl)
+	ld	(hl),0
+	ret	z
+	xor	a
+	ld	(l687c),a
+	ld	hl,.FullToken
+	ld	($GetVec),hl	; Set token routine
+	ld	c,21
+	jp	.ERROR
+;
+; >>> END OF FILE <<<
+;
+EndOfFile:
+	ld	hl,l686b
+	call	l0994
+	ld	hl,l6844
+	call	l0994
+	ld	hl,$END.PASS
+	call	PutStr		; Print end of this pass
+	call	l4041
+	ld	hl,(ABS.ORG)	; Get origin
+	inc	hl
+	ld	a,h		; Test wrap
+	or	l
+	jr	nz,l09d4	; .. nope
+	call	l0a37
+	ld	hl,TPA
+	jr	z,l09d1
+	dec	h
+l09d1:
+	ld	(ABS.ORG),hl	; .. set origin
+l09d4:
+	ld	a,(Pass)	; Get pass
+	or	a
+	jr	z,l0a35		; .. 1st pass
+	cp	1
+	jr	z,l09e3		; .. 2nd pass
+	ld	a,0feh
+	call	l6395
+l09e3:
+	call	push.r		; Push regs
+	ld	a,(CurUsr)	; Get user
+	call	SetUsr		; .. log it
+	ld	de,(CurFCB)	; Get FCB
+	ld	c,.close
+	call	BDOS		; Close file
+	ld	a,(LogUsr.)
+	call	SetUsr		; Log user
+	call	pop.r		; Pop regs
+	ld	a,(l6841)
+	or	a
+	jr	z,l0a35
+	ld	bc,l0400
+	call	d.alloc_	; Allocate memory
+	ld	(l6842),hl
+	call	push.r		; Push regs
+	ld	a,($$FCB$$)	; Get disk
+	dec	a		; .. fix
+	call	SetDsk		; .. log it
+	ld	c,.close
+	ld	de,$$FCB$$
+	call	BDOS		; Close file
+	xor	a
+	ld	($$FCB$$+_EXT),a; Clear extent
+	ld	de,$$FCB$$
+	ld	c,.open
+	call	BDOS		; Re-open file
+	call	pop.r		; Pop regs
+	xor	a
+	ld	($$FCB$$+_EXT),a; Clear extent
+	ld	($$FCB$$+_CR),a	; .. current record
+l0a35:
+	pop	hl
+	ret
+;
+;
+;
+l0a37:
+	ld	a,(_OPT_)	; Get option
+	bit	_REL,a		; Test relocatable
+	ret	z		; .. nope
+	ld	a,($ASEG$)	; Zero is 0100H on ABS
+	or	a
+	ret
+;
+;
+;
+l0a42:
+	ld	hl,l133d
+	call	Set.jp.tab	; Init jump table
+	ld	hl,NoMemory	; Init error vector
+	ld	(@MEMER@),hl
+	xor	a
+	ld	(Pass),a	; Set 1st pass
+	ld	bc,l0050
+	call	d.alloc_	; Allocate memory
+	ld	(l0b9f),hl
+	ex	de,hl
+	ld	hl,(l6867)
+	ld	bc,lfff2
+	add	hl,bc
+	ld	bc,l0032
+	ldir			; .. copy into memory
+	ld	hl,@MES@
+	ld	bc,l001e
+	ldir			; Get message
+	call	DisXXX?		; Disable ???
+	call	l4d96
+	call	l4018
+	call	ProcSRC		; Process source file
+	call	l47fa
+	xor	a
+	ld	(l6846),a
+	ld	a,-16
+	ld	(l668f),a
+	ld	hl,l6b44
+	ld	(LinePtr),hl	; Init line pointer
+	ld	a,4
+	ld	(l6387),a
+	ld	hl,Pass
+	inc	(hl)		; Bump pass
+	ld	a,'2'
+	ld	($PASS),a	; Set pass 2
+	ld	hl,($FOUR$)	; Reset presets
+	ld	(_FOUR_),hl
+	ld	hl,(l6867)
+	ld	bc,lfff2
+	add	hl,bc
+	ld	bc,l0032
+	ex	de,hl
+	ld	hl,(l0b9f)
+	ldir
+	ld	de,@MES@
+	ld	bc,l001e
+	ldir			; Put into message
+	ld.hl	1,1
+	ld	(_rPage_),hl	; Init pages
+	call	l22a2
+	ld	a,($CLOSE$)	; Test close and reopen
+	or	a
+	jr	z,l0af8		; .. nope
+	call	push.r		; Push regs
+	ld	a,(CurUsr)	; Get user
+	call	SetUsr		; .. log it
+	ld	de,(CurFCB)	; Get FCB
+	push	de
+	ld	a,(de)		; Fetch disk
+	dec	a
+	call	SetDsk		; .. log it
+	pop	de
+	push	de
+	ld	c,.close
+	call	BDOS		; Close file
+	pop	de
+	ld	hl,_EXT
+	add	hl,de
+	ld	(hl),0		; Clear extent
+	ld	c,.open
+	call	BDOS		; Re-open file
+	ld	a,(LogUsr.)
+	call	SetUsr		; Log user
+	call	pop.r		; Pop regs
+l0af8:
+	call	SetFileTab	; Set file table
+	call	Ini$FO		; Init file mode
+	ld	a,_RET
+	ld	(l5095),a
+	ld	hl,_OPT_
+	bit	_FULL,(hl)	; Test full listing
+	call	nz,EnaXXX?	; .. yeap, init table
+	ld	a,(_OPT_)
+	bit	_CROSS,a	; Test cross reference
+	call	nz,l5cf7	; .. yeap
+	call	l4018
+	ld	a,(OS.Flg)	; Test vector swapped
+	or	a
+	jr	z,l0b26		; .. nope
+	xor	a
+	ld	(OS.Flg),a	; Clear flag
+	ld	hl,(OS.sav)	; Reset OS vector
+	ld	(OS+1),hl
+l0b26:
+	call	l5b35
+	jr	l0b30
+l0b2b:
+	ld	a,(hl)
+	cp	0f0h
+	jr	z,l0b37
+l0b30:
+	call	l5b4b
+	jr	nz,l0b2b
+	jr	l0b4b
+l0b37:
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	inc	de
+	inc	de
+	inc	de
+	ld	a,(l688c)
+	or	a
+	jr	nz,l0b45
+	inc	de
+l0b45:
+	xor	a
+	ld	(de),a
+	inc	de
+	ld	(de),a
+	jr	l0b30
+l0b4b:
+	ld	hl,0
+	ld	(l687f),hl
+	ld	a,10
+	call	SetRadix	; Set radix 10
+	call	ProcSRC		; Process source file
+	ld	a,1
+	call	SelFile		; Select file
+	ld	a,_CALL		; Set call
+	ld	(l5095),a
+	call	l523e
+	jp	l0972
+;
+; Init ????? table
+;
+EnaXXX?:
+	xor	a		; Set NOP
+	ld	(l08af),a
+	ld	hl,l136a
+	ld	de,l63bf
+	ld	bc,l137f-l136a
+	ldir
+	ret
+;
+; Init jump table
+; ENTRY	Reg HL holds source table
+;
+Set.jp.tab:
+	ld	de,l6392
+	ld	bc,l1289-l125c
+	ldir
+	ret
+;
+; Prepare file table
+;
+SetFileTab:
+	ld	a,(_OPT_)	; Get option
+	add	a,a		; Test relocatable
+	jr	c,l0b94		; .. yeap
+	ld	hl,l125c
+	add	a,a		; Test .HEX
+	jr	nc,l0b91	; .. nope, ABS
+	ld	hl,l1289
+l0b91:
+	jp	Set.jp.tab	; .. set table
+l0b94:
+	ld	hl,l12e3
+	add	a,a		; Test REL-80
+	jr	nc,l0b91	; .. nope
+	ld	hl,l12b6
+	jr	l0b91		; .. set table
+l0b9f:
+	dw	0
+;
+; @@@@@@@@@@@@@@@@@@@@@@@@
+; !!! End of assembler !!!
+; @@@@@@@@@@@@@@@@@@@@@@@@
+;
+EndOfASM::
+	ld	a,($FF.EOL$)	; Test form feed at end
+	or	a
+	ld	hl,$FF
+	call	nz,PrStrg	; Print form feed if enabled
+	ld	a,(l601b)	; Get enable flag
+	or	a
+	jr	nz,l0bb9	; .. yeap
+	ld	a,2
+	call	SelFile		; Select file
+	call	l5f15
+l0bb9:
+	call	push.r		; Push regs
+	ld	a,(LogDsk.)	; Get disk
+	dec	a
+	call	SetDsk		; .. log it
+	ld	a,(LogUsr.)
+	call	SetUsr		; .. and user
+	call	pop.r		; Pop regs
+	ld	a,(OS.Flg)	; Test vector swapped
+	or	a
+	jr	z,.NextASM	; .. nope
+	xor	a
+	ld	(OS.Flg),a	; Clear flag
+	ld	hl,(OS.sav)	; Reset OS vector
+	ld	(OS+1),hl
+.NextASM:
+	jp	NextASM		; Try next run
+;
+;
+;
+l0bdf:
+	ld	a,YES
+	ld	(_DIR_),a	; Force UPPER-LOWER
+	ld	a,(_OPT_)
+	bit	_SYM,a		; Test symbol file
+	call	nz,l5c3f	; .. yeap
+	ld	a,(_OPT_)
+	bit	_CROSS,a	; Test cross reference
+	call	nz,l5d36	; .. yeap
+	ret
+;
+;
+;
+l0bf5:
+	ld	a,(l07f1)	; Get codes
+	ld	hl,_FOUR_	; .. list more than four
+	xor	(hl)
+	cp	_RET
+	jp	z,l0c9d
+	ld	a,(_FALSE_)	; Get list FALSE
+	cpl
+	ld	hl,l687c
+	and	(hl)
+	jp	m,l0c9d
+	ld	hl,(l6867)
+	bit	@MSB,(hl)
+	jr	z,l0c2b
+	ld	hl,_MACRO_
+	bit	0,(hl)		; Test .LALL
+	jr	nz,l0c2b	; .. yeap
+	bit	2,(hl)		; .. or .SALL
+	jr	nz,l0c9d	; .. yeap
+	ld	a,(l6846)
+	or	a
+	jr	nz,l0c9d
+	ld	a,(l6387)
+	cp	4
+	jr	z,l0c9d
+l0c2b:
+	ld	a,(l6846)
+	or	a
+	jr	nz,l0c49
+	ld	hl,l6387
+	ld	a,(l684d)
+	or	a
+	jp	p,l0c3f
+	cp	0f0h
+	jr	nz,l0c44
+l0c3f:
+	ld	a,(hl)
+	cp	4
+	jr	z,l0c49
+l0c44:
+	ld	(hl),6
+	call	l0cd4
+l0c49:
+	ld	a,($NEST$)	; Test nesting level to print
+	or	a
+	jr	z,l0c60		; .. nope
+	ld	a,(l682d)	; Test letter
+	or	a
+	jr	z,l0c60		; .. nope
+	add	a,'A'-1		; Make ASCII
+	cp	'Z'+1		; Test range
+	jr	c,l0c5d
+	ld	a,'*'		; .. map asterisk
+l0c5d:
+	ld	(l6b4f),a
+l0c60:
+	ld	hl,CurLine	; Point to current line
+	ld	a,($LIN.NR$)	; Test # statement
+	or	a
+	jr	z,l0c6c		; .. nope
+	ld	hl,l6694
+l0c6c:
+	ld	de,l6b37
+	ld	a,5
+	call	BCDtoASC.	; Convert to ASCII
+	ld	a,($PR.LINNR$)	; Test # to be printed
+	or	a
+	ld	hl,l6b36
+	ld	de,l6b3d
+	jr	nz,l0c81	; .. yeap
+	ex	de,hl
+l0c81:
+	push	de
+	ld	de,l691f
+	call	ldir.8		; Copy message
+	pop	hl
+	call	ldir.8		; .. append
+	ld	a,0ffh
+	ld	(de),a
+	call	l63ce
+	ld	a,_RET
+	ld	(l07f1),a
+	ld	hl,l6694+2
+	call	IncBCD		; Increment value
+l0c9d:
+	ld	a,($REL$)	; Get REL mode
+	ld	(l6386),a
+	ld	($PC$),iy	; Set PC
+	ld	a,4
+	ld	(l6387),a
+	xor	a
+	ld	(l6846),a
+	ld	hl,l6b44
+	ld	(LinePtr),hl	; Init line pointer
+l0cb6:
+	ld	hl,l6b3e
+	ld	de,l6b3e+1
+	ld	bc,18-1
+	ld	(hl),' '
+	ldir
+	ret
+;
+; Increment BCD value by one (Three BCDs)
+; ENTRY	Reg HL points to LSD of BCD
+;
+IncBCD:
+	ld	a,(hl)
+	add	a,1		; .. increment
+	daa
+	ld	(hl),a
+	ret	nc		; .. done
+	dec	hl		; Get previous
+	adc	a,(hl)
+	daa
+	ld	(hl),a
+	ret	nc		; .. done
+	dec	hl		; Get last
+	adc	a,(hl)
+	daa
+	ld	(hl),a
+	ret
+;
+;
+;
+l0cd4:
+	ld	hl,l6b3e
+	ld	(LinePtr),hl	; Init line pointer
+	ld	hl,($PC$)	; Get PC
+	ld	a,(_DIR_)	; Test direction of bytes
+	or	a
+	ld	a,(l6386)
+	jr	nz,l0d36	; .. UPPER-LOWER
+	ld	a,YES
+	ld	(_DIR_),a	; Force UPPER-LOWER
+	ld	a,(l6386)
+	call	l0d36
+	xor	a
+	ld	(_DIR_),a	; Reset LOWER-UPPER
+	ret
+;
+;
+;
+l0cf6:
+	inc	iy
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ld	hl,(LinePtr)	; Get line pointer
+	ld	(hl),'?'	; .. set quotes
+	inc	hl
+	ld	(hl),'?'
+	inc	hl
+	jr	l0d1b
+;
+; ????????????????????
+; ENTRY	Accu holds ???
+;
+l0d07:
+	inc	iy
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ld	hl,l6388
+	ld	(hl),a
+	ld	de,(LinePtr)	; Get line pointer
+	ld	a,2
+	call	BCDtoASC	; Convert byte to ASCII
+	ex	de,hl
+l0d1b:
+	ld	(hl),' '	; Set delimiter
+	inc	hl
+	ld	(LinePtr),hl	; Save line pointer
+	ld	hl,l6387
+l0d24:
+	dec	(hl)		; Count down
+	call	z,l63c5		; .. ??? if zero
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+;
+;
+;
+l0d2d:
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	jr	l0d47
+l0d32:
+	inc	iy
+	inc	iy
+l0d36:
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ex	de,hl
+	ld	hl,l6389
+l0d3e:
+	ld	a,(_DIR_)	; Test direction
+	or	a
+	jr	z,l0d2d		; .. LOWER-UPPER
+	ld	(hl),e
+	dec	hl
+	ld	(hl),d
+l0d47:
+	ld	de,(LinePtr)	; Get line pointer
+	ld	a,4
+	call	BCDtoASC	; Convert word to ASCII
+	pop	af		; Get address mode
+l0d51:
+	push	af
+	ex	de,hl
+l0d53:
+	or	a		; Test address mode
+	ld	c,' '		; .. absolute
+	jr	z,l0d6a
+	dec	a
+	ld	c,''''
+	jr	z,l0d6a		; .. code segment
+	dec	a
+	ld	c,'"'
+	jr	z,l0d6a		; .. data segment
+	ld	c,'#'
+	cp	cr
+	jr	nc,l0d6a
+	ld	c,'*'
+l0d6a:
+	ld	(hl),c		; Save address mode
+	inc	hl
+	ld	(hl),' '	; .. blank next
+	inc	hl
+	ld	(LinePtr),hl	; Set line pointer
+	ld	hl,l6387
+	dec	(hl)
+	jr	l0d24
+;
+;
+;
+l0d78:
+	inc	iy
+	inc	iy
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ld	hl,(LinePtr)	; Get line pointer
+	ld	a,'?'
+	ld	(hl),a		; Indicate quote
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	xor	a
+	jr	l0d53
+;
+; Got ' or "
+;
+@STRG.1:
+	pop	hl
+	ld	h,d
+	ld	l,e
+	ld	c,(hl)
+	ld	b,0
+	add	hl,bc
+	inc	hl
+	ld	(TokPtr),hl	; Save token pointer
+	ld	a,c
+	ld	c,'V'
+	cp	3
+	jr	nc,l0db9
+	ld	hl,l680d
+	bit	0,(hl)
+	jr	z,l0dad
+	cp	2
+	jr	z,l0db9
+l0dad:
+	ld	c,'8'
+	ex	de,hl
+	inc	hl
+	ld	d,b
+	ld	e,(hl)
+	dec	a
+	jr	z,l0db9
+	ld	d,e
+	inc	hl
+	ld	e,(hl)
+l0db9:
+	ex	de,hl
+	ld	a,c
+	ret
+;
+;
+;
+l0dbc:
+	ld	a,-1
+	ld	(l6805),a	; Set flag
+	call	GetToken	; .. get token
+l0dc4:
+	xor	a
+	ld	(l6805),a	; Clear flag
+	ld	a,c		; Get back token ??
+	ret
+;
+;
+;
+l0dca:
+	ld	a,-1
+	ld	(l6805),a
+	call	.PartToken
+	jr	l0dc4
+;
+;
+;
+l0dd4:
+	ld	(hl),0
+	ld	c,a
+	ld	hl,(l6877)
+	inc	a
+	jr	z,l0ddf
+	dec	a
+	ret
+l0ddf:
+	ld	hl,(TokStrt)	; Get token start pointer
+	ld	a,(hl)		; .. and token
+	jr	l0e12		; .. convert
+;
+; Get token supressing ????????????
+; EXIT	Accu holds token
+;
+.PartToken:
+	ld	a,_RET
+	ld	(l13a7),a
+l0dea:
+	call	.FullToken	; Process token
+	ld	c,a
+	ld	a,_CALL		; Set call
+	ld	(l13a7),a
+	ld	a,c
+	ret
+;
+;
+;
+l0df5:
+	ld	a,_JP
+	ld	(l13a7),a
+	jr	l0dea
+;
+; Get token
+; EXIT	Accu holds token
+;
+GetToken:
+	jp	.FullToken	; Process token
+$GetVec	equ	$-2
+;
+; Get token
+; EXIT	Accu holds token
+;
+.FullToken:
+	ld	hl,l6879
+	ld	a,(hl)
+	or	a		; Test flag
+	jr	nz,l0dd4
+	ld	hl,(TokPtr)	; Get token pointer
+l0e09:
+	inc	hl
+	ld	a,(hl)		; Get token
+	cp	35h		; Test white space
+	jr	z,l0e09		; .. skip
+	ld	(TokStrt),hl	; Save pointer if not a space
+l0e12:
+	cp	53h		; Test range
+	jr	c,l0e1e		; .. 'normal'
+	call	ProcToken	; .. process token
+	jp	nz,GetLabel	; .. must be label
+	dec	hl
+	ld	a,c		; Get resulting token
+l0e1e:
+	ld	(TokPtr),hl	; Save token pointer
+	ld	l,a		; Get token as index
+	ld	h,HIGH l0400
+	bit	6,(hl)		; Test bit set
+	ld	c,a
+	ret	z		; .. nope
+	ld	a,(l6805)
+	or	a
+	ld	a,c
+	ret	z
+	ld	hl,(TokStrt)	; Get token start pointer
+	ld	a,_RET
+	ld	(l13aa),a	; .. disable check
+	push	bc
+	call	GetLabel	; Get label
+	pop	bc
+	ld	a,_JR.NC	; .. enable check
+	ld	(l13aa),a
+	ld	a,c
+	ret	c
+	ld	a,(hl)
+	cp	0f0h
+	ld	a,c
+	ret	nz
+	ld	c,39h
+	ld	a,c
+	ret
+;
+; Convert to a token
+;
+ProcToken:
+	jp	DoToken		; Default is lower to UPPER
+$TokVec	equ	$-2
+;
+; Process lower as UPPER
+;
+DoToken:
+	inc	hl
+	ex	de,hl
+	cp	80h		; Test case
+	jp	nc,@LABEL	; .. lower case
+	sub	53h		; Strip off offset
+	ld	h,HIGH TokenTab
+	add	a,a		; * 2
+	ld	l,a		; .. as index
+	ld	a,(hl)		; Fetch execution address
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	jp	(hl)		; .. jump
+;
+; Process different case token
+;
+DoLowToken:
+	cp	56h
+	jr	z,DoToken	; .. process string
+	ld	de,$LOTOK$	; Init buffer
+	ld.bc	32,53h
+l0e6a:
+	ld	a,(hl)
+	cp	80h		; Test lower case
+	jr	c,l0e75		; .. nope
+	cp	80h+'z'-'a'+1	; Test range
+	jr	nc,l0e75	; .. out of range
+	sub	80h-66h		; Convert to UPPER case
+l0e75:
+	ld	(de),a		; Save token
+	inc	hl
+	inc	de
+	cp	c		; Test range
+	jr	c,l0e82
+l0e7b:
+	djnz	l0e6a
+	ld	a,56h		; Set string
+	ld	(de),a
+	jr	l0e8b
+l0e82:
+	dec	de
+	dec	de
+	ld	a,(de)
+	inc	de
+	inc	de
+	cp	56h		; Test previous string
+	jr	z,l0e7b		; .. yeap
+l0e8b:
+	ld	hl,(TokStrt)	; Get start pointer
+	push	hl		; .. save
+	ld	hl,$LOTOK$	; Swap pointer
+	ld	(TokStrt),hl
+	ld	a,(hl)		; Get token
+	call	DoToken		; .. convert
+	jr	nz,l0eaa	; .. no known token
+l0e9b:
+	ex	de,hl
+	ex	(sp),hl		; Get back old pointer
+	ld	(TokStrt),hl	; .. bring back
+	push	hl
+	ld	hl,-$LOTOK$	; .. ** MYSTERIOUS ** l9773
+	add	hl,de
+	pop	de
+	add	hl,de
+	pop	de
+	xor	a
+	ret
+l0eaa:
+	pop	hl		; Get back old pointer
+	ld	(TokStrt),hl	; .. reset
+	ld	a,(hl)		; Get token
+	jr	DoToken		; .. convert
+;
+; Convert string to hex
+;
+l0eb1:
+	pop	de
+	inc	hl
+	ld	a,(hl)		; Get length
+	cp	6		; Test hex range
+	jr	nc,l0f1d	; .. nope
+	inc	hl		; .. skip length
+	ld	de,l6897
+	ex	de,hl
+	push	hl
+	ld	b,HIGH CtrlArr	; Load control page
+l0ec0:
+	push	af
+	ld	a,(de)		; Get character
+	cp	'a'		; Test case
+	jr	c,l0ecc
+	cp	'z'+1
+	jr	nc,l0ecc
+	sub	'a'-'A'		; .. convert to UPPER case
+l0ecc:
+	ld	c,a		; .. set as index
+	ld	a,(bc)		; Get control
+	ld	(hl),a		; .. unpack
+	inc	hl
+	inc	de
+	pop	af
+	dec	a
+	jr	nz,l0ec0
+	ld	(TokPtr),de	; Save token pointer
+	dec	hl
+	jp	Get$HEX		; Get hex number
+;
+; Got 0
+;
+@ZERO:
+	pop	hl
+	ex	de,hl
+	ld	a,5ch		; Set 0
+	dec	hl
+l0ee2:
+	inc	hl
+	cp	(hl)
+	jr	z,l0ee2		; Skip leading zeroes
+	push	hl
+	jr	l0eee
+;
+; Numeric input, got 1..9
+;
+@NUMB:
+	ld	hl,(TokStrt)	; Get token start pointer
+	ex	(sp),hl
+	ex	de,hl
+l0eee:
+	dec	hl
+	ld	a,5bh		; Set @
+l0ef1:
+	inc	hl
+	cp	(hl)		; Test range
+	jr	c,l0ef1		; .. skip not numeric
+	dec	hl
+	ld	(TokPtr),hl	; Save token pointer
+	ld	a,(Radix)	; Get radix
+	add	a,5ch		; .. add 0
+	ld	c,a
+	ld	a,(hl)
+	cp	c		; Compare
+	jp	c,$-$
+l0f02	equ	$-2
+	dec	hl
+	cp	6dh
+	jr	z,Get$HEX	; Get hex
+	cp	67h
+	jp	z,Get$BIN	; .. binary
+	cp	69h
+	jr	z,Get$DEC	; .. decimal
+	cp	74h
+	jp	z,Get$OCT	; .. octal
+	cp	76h
+	jp	z,Get$OCT	; .. dtto.
+	pop	hl
+l0f1d:
+	ld	c,32
+	ld	a,(l13a7)	; Test enabled
+	cp	_RET
+	jr	z,l0f2e		; .. nope
+	call	.ERROR		; .. error
+	ld	hl,0		; Return NUL
+	jr	l0f4a
+l0f2e:
+	ld	a,(_OPT_)	; Get option
+	and	1 SHL _NOUPP	; Test conversion to UPPER
+	ld	c,39h
+	jp	nz,l0e9b	; .. nope, disabled
+	ld	a,c		; .. get reurn
+	ret
+;
+; Get decimal input
+;
+Get$DEC:
+	pop	de
+	or	a
+	sbc	hl,de		; Test only one digit
+	jr	z,l0f69		; .. yeap
+	inc	l
+	jr	z,l0f75
+	ld	a,l
+	ex	de,hl
+	call	In$DEC		; Get decimal
+l0f48:
+	jr	c,l0f1d
+l0f4a:
+	ld	c,38h
+l0f4c:
+	ld	a,(_OPT_)	; Get option
+	and	1 SHL _NOUPP	; Test conversion
+	ld	a,c
+	ret	z		; .. yeap
+	push	hl
+	ld	hl,(TokPtr)	; Get token pointer
+	ld	de,-$LOTOK$	; ** MYSTERIOUS ** l9773
+	add	hl,de
+	pop	de
+	pop	bc
+	ld	(TokStrt),bc	; .. save start pointer
+	add	hl,bc
+	ld	(TokPtr),hl	; Set token pointer
+	ex	de,hl
+	pop	de
+	ld	c,a
+	ret
+l0f69:
+	ld	a,(de)		; Get token
+	sub	5ch		; Strip off 0
+	cp	9+1		; Test range
+l0f6e:
+	jr	nc,l0f1d	; .. overflow
+l0f70:
+	ld	h,0		; Clear hi
+	ld	l,a		; .. save lo
+	jr	l0f4a
+l0f75:
+	xor	a
+	jr	l0f70
+;
+; Get hexadecimal input
+;
+Get$HEX:
+	pop	de
+	or	a
+	sbc	hl,de		; Test only one digit
+	jr	z,l0f88		;.. yeap
+	inc	l
+	jr	z,l0f75
+	ld	a,l
+	ex	de,hl
+	call	In$HEX		; Get hex
+	jr	l0f48
+l0f88:
+	ld	a,(de)		; Get token
+	sub	5ch		; Strip off 0
+	cp	15+1		; Test range
+	jr	l0f6e
+;
+; Get binary input
+;
+Get$BIN:
+	pop	de
+	or	a
+	sbc	hl,de		; Test only one digit
+	jr	z,l0f9f		; .. yeap
+	inc	l
+	jr	z,l0f75
+	ld	a,l
+	ex	de,hl
+	call	In$BIN		; Get binary
+	jr	l0f48
+l0f9f:
+	ld	a,(de)		; Get token
+	sub	5ch		; .. strip off 0
+	cp	1+1		; Test range
+	jr	l0f6e
+;
+; Get octal input
+;
+Get$OCT:
+	pop	de
+	or	a
+	sbc	hl,de		; Test only one digit
+	jr	z,l0fb6		; .. yeap
+	inc	l
+	jr	z,l0f75
+	ld	a,l
+	ex	de,hl
+	call	In$OCT		; Get octal
+	jr	l0f48
+l0fb6:
+	ld	a,(de)		; Get token
+	sub	5ch		; .. strip off 0
+	cp	7+1		; Test range
+	jr	l0f6e
+;
+; Get any base input
+;
+Get$NUM:
+	pop	de
+	or	a
+	sbc	hl,de		; Test only one digit
+	jr	z,l0fce		; .. yeap
+	inc	l
+	jr	z,l0f75
+	ld	a,l
+	ex	de,hl
+	call	In$NUM		; Get any base number
+	jp	l0f48
+l0fce:
+	ld	a,(Radix)	; Get radix
+	ld	c,a
+	ld	a,(de)		; Get token
+	sub	5ch		; Strip off 0
+	cp	c		; .. test range
+	jr	l0f6e
+;
+; Get label
+;
+GetLabel:
+	ld	a,56h		; Set string
+	dec	hl
+l0fdb:
+	inc	hl
+	cp	(hl)		; Position pointer behind token
+	jp	c,l0fdb
+	ld	de,(TokStrt)	; Get start pointer
+	dec	hl
+	ld	(TokPtr),hl	; Save token pointer
+	sbc	hl,de		; .. get difference
+	ld	a,l
+	inc	a
+	cp	16		; Test range
+	jr	c,l0ff2
+	ld	a,16		; .. truncate max
+l0ff2:
+	ld	l,a
+	inc	a
+	ld	(l68a4),a	; Set length of label
+	add	hl,de		; Point to end of label
+	ld	a,(hl)		; Get token there
+	push	hl
+	ld	(hl),0		; .. clear temporary
+	push	af
+	call	l13a7
+	pop	de
+	ld	a,d		; Get back token
+	pop	de
+	ld	(de),a		; .. reset
+	ld	a,39h		; Return LABEL
+	ld	c,a
+	ret
+l1008:
+	ds	5
+;
+; Got '<'
+;
+@OPER.1:
+	pop	hl
+	ex	de,hl
+	ld	a,(hl)
+	cp	49h		; Test <=
+	ld	c,4ch
+	jr	z,l1046
+	cp	54h		; .. <>
+	ld	c,4ah
+	jr	z,l1046
+	cp	53h		; .. <<
+	ld	c,43h
+	jr	z,l1046
+	dec	hl
+	ld	c,4bh		; Set < operator
+	jr	l1046
+;
+; Got '>'
+;
+@OPER.2:
+	pop	hl
+	ex	de,hl
+	ld	a,(hl)
+	cp	49h		; Test >=
+	ld	c,4eh
+	jr	z,l1046
+	cp	54h		; .. >>
+	ld	c,42h
+	jr	z,l1046
+	dec	hl
+	ld	c,4dh		; Set > operator
+	jr	l1046
+;
+; Found any left parenthesis ( [ or {
+;
+@PAREN:
+	pop	hl
+	call	l104c		; Get register
+	jr	z,l1046		; .. it's closed
+	ld	c,55h		; Set ( [ {
+	ld	hl,(TokStrt)	; Get entry pointer
+l1046:
+	ld	(TokPtr),hl	; Save token pointer
+	jp	l0f4c
+;
+; Try to find (HL), (I..
+;
+l104c:
+	ex	de,hl
+	ld	a,(hl)
+	cp	6dh		; Test (H..
+	jr	z,l1072
+	cp	6eh		; .. I
+	jr	nz,l1083
+	inc	hl
+	ld	a,(hl)
+	cp	7eh		; Try IY
+	jr	z,l107e
+	cp	7dh		; .. IX
+	ret	nz		; .. nope
+	ld.bc	2ah,2dh
+l1062:
+	inc	hl
+	ld	a,(hl)
+	cp	57h		; Test valid range
+	jr	nc,l106f	; .. nope
+	cp	52h		; Test closure
+	ret	z		; .. yeap
+	dec	hl
+	xor	a
+	ld	c,b		; Unpack code
+	ret
+l106f:
+	xor	a
+	inc	a
+	ret
+l1072:
+	inc	hl
+	ld	a,(hl)
+	cp	71h		; .. L
+	ret	nz
+	ld	c,16h		; Map HL
+l1079:
+	inc	hl
+	ld	a,(hl)
+	cp	52h		; Test closure ) ] }
+	ret
+l107e:
+	ld.bc	2bh,2eh
+	jr	l1062
+l1083:
+	cp	69h		; Test DE
+	jr	z,l109d		; .. maybe
+	cp	67h
+	jr	z,l10a6		; .. maybe BC
+	cp	68h		; Simple C
+	ld	c,31h
+	jr	z,l1079		; .. yeap
+	cp	78h		; Test SP
+	ret	nz		; .. nope
+	inc	hl
+	ld	a,(hl)
+	cp	75h		; Verify SP
+	ret	nz
+	ld	c,2ch		; .. map
+	jr	l1079
+l109d:
+	inc	hl
+	ld	a,(hl)
+	cp	6ah		; Verify DE
+	ret	nz		; .. nope
+	ld	c,30h		; .. map
+	jr	l1079
+l10a6:
+	inc	hl
+	ld	a,(hl)
+	cp	68h		; Verify BC
+	ret	nz		; .. nope
+	ld	c,2fh		; .. map
+	jr	l1079
+;
+; Opcode type table
+;
+OpCodTab:
+;
+; Part 1 : Regular opcodes
+;
+	db	 5,088h,04ah	; 58	ADC
+	db	 6,009h,080h	; 59	ADD
+	db	 7,0a0h,000h	; 5A	AND
+	db	 8,040h,000h	; 5B	BIT
+	db	 3,0cdh,0c4h	; 5C	CALL
+	db	 1,03fh,000h	; 5D	CCF
+	db	 7,0b8h,000h	; 5E	CP
+	db	 2,0a9h,000h	; 5F	CPDR
+	db	 2,0b9h,000h	; 60	CPD
+	db	 2,0a1h,000h	; 61	CPIR
+	db	 2,0b1h,000h	; 62	CPI
+	db	 1,02fh,000h	; 63	CPL
+	db	 1,027h,000h	; 64	DAA
+	db	 9,005h,00bh	; 65	DEC
+	db	 1,0f3h,000h	; 66	DI
+	val.adr	 0,l2cc9	; 67	DJNZ
+	db	 1,0fbh,000h	; 68	EI
+	val.adr	 0,l2f94	; 69	EX
+	db	 1,0d9h,000h	; 6A	EXX
+	db	 1,076h,000h	; 6B	HALT
+	val.adr	 0,l2cba	; 6C	IM
+	val.adr	 0,l2f32	; 6D	IN
+	val.adr	 0,l2ed2	; 6E	IN0
+	db	 9,004h,003h	; 6F	INC
+	db	 2,0aah,000h	; 70	IND
+	db	 2,0bah,000h	; 71	INDR
+	db	 2,0a2h,000h	; 72	INI
+	db	 2,0b2h,000h	; 73	INIR
+	db	10,0c3h,0c2h	; 74	JP
+	val.adr	 0,l2cd0	; 75	JR
+	val.adr	 0,l2e11	; 76	LD
+	db	 2,0a8h,000h	; 77	LDD
+	db	 2,0b8h,000h	; 78	LDDR
+	db	 2,0a0h,000h	; 79	LDI
+	db	 2,0b0h,000h	; 7A	LDIR
+	val.adr	 0,l2ef7	; 7B	MLT
+	db	 2,044h,000h	; 7C	NEG
+	db	 1,000h,000h	; 7D	NOP
+	db	 7,0b0h,000h	; 7E	OR
+	db	 2,08bh,000h	; 7F	OTDM
+	db	 2,09bh,000h	; 80	OTDMR
+	db	 2,0bbh,000h	; 81	OTDR
+	db	 2,083h,000h	; 82	OTIM
+	db	 2,093h,000h	; 83	OTIMR
+	db	 2,0b3h,000h	; 84	OTIR
+	val.adr	 0,l2f5a	; 85	OUT
+	val.adr	 0,l2ee6	; 86	OUT0
+	db	 2,0abh,000h	; 87	OUTD
+	db	 2,0a3h,000h	; 88	OUTI
+	db	11,0c1h,000h	; 89	POP
+	db	11,0c5h,000h	; 8A	PUSH
+	db	 8,080h,000h	; 8B	RES
+	val.adr	 0,l2ec3	; 8C	RET
+	db	 2,04dh,000h	; 8D	RETI
+	db	 2,045h,000h	; 8E	RETN
+	db	 4,010h,000h	; 8F	RL
+	db	 1,017h,000h	; 90	RLA
+	db	 4,000h,000h	; 91	RLC
+	db	 1,007h,000h	; 92	RLCA
+	db	 2,06fh,000h	; 93	RLD
+	db	 4,018h,000h	; 94	RR
+	db	 1,01fh,000h	; 95	RRA
+	db	 4,008h,000h	; 96	RRC
+	db	 1,00fh,000h	; 97	RRCA
+	db	 2,067h,000h	; 98	RRD
+	val.adr	 0,l2fe3	; 99	RST
+	db	 5,098h,042h	; 9A	SBC
+	db	 1,037h,000h	; 9B	SCF
+	db	 8,0c0h,000h	; 9C	SET
+	db	 4,020h,000h	; 9D	SLA
+	db	 2,076h,000h	; 9E	SLP
+	db	 4,028h,000h	; 9F	SRA
+	db	 4,038h,000h	; A0	SRL
+	db	 7,090h,000h	; A1	SUB
+	val.adr	 0,l2f04	; A2	TST
+	val.adr	 0,l2f24	; A3	TSTIO
+	db	 7,0a8h,000h	; A4	XOR
+;
+; Part 2 : Pseudo opcodes
+;
+	val.adr	 0,l3e95	; A5	ASEG
+	val.adr	12,_FALSE_	; A6	LFCOND
+	val.adr	 0,l3f47	; A7	COMMON
+	val.adr	 0,l4033	; A8	DSEG
+	val.adr	 0,l4079	; A9	DB
+	val.adr	 0,l4370	; AA	ASET
+	val.adr	 0,l416c	; AB	DS
+	val.adr	 0,l4228	; AC	DW
+	val.adr	 0,l425a	; AD	.DEPHASE
+	val.adr	 0,l4283	; AE	???
+	val.adr	 0,l42a4	; AF	END
+	val.adr	 0,l42db	; B0	ENDIF
+	val.adr	 0,l42fd	; B1	ENDM
+	val.adr	 0,l4302	; B2	ENTRY
+	val.adr	 0,l4374	; B3	EQU
+	val.adr	 0,l4404	; B4	EXTERN
+	val.adr	 0,l4541	; B5	IF
+	val.adr	 0,l4590	; B6	INCLUDE
+	val.adr	 0,l47fa	; B7	LIST
+	val.adr	 0,l4943	; B8	MACRO
+	val.adr	12,_FOUR_	; B9	MTLIST
+	val.adr	 0,l4a25	; BA	NAME
+	val.adr	13,_FALSE_	; BB	.SFCOND
+	val.adr	 0,l4a74	; BC	.XLIST
+	val.adr	13,_FOUR_	; BD	NMTLIST
+	val.adr	 0,l4a8e	; BE	ORG
+	val.adr	 0,l4af1	; BF	EJECT
+	val.adr	 0,l4b40	; C0	.PHASE
+	val.adr	 0,l4b8d	; C1	CSEG
+	val.adr	 0,l4cf8	; C2	TITLE
+	val.adr	 0,l3eb0	; C3	.ACCEPT
+	val.adr	 0,l3fed	; C4	.COMMENT
+	val.adr	 0,l4018	; C5	.CREF
+	val.adr	 0,l43cc	; C6	EXITM
+	db	 2,046h,000h	; C7	IM0
+	db	 2,056h,000h	; C8	IM1
+	db	 2,05eh,000h	; C9	IM2
+	val.adr	 0,l4727	; CA	IRPC
+	val.adr	 0,l472c	; CB	IRP
+	val.adr	 0,l3ea2	; CC	.LALL
+	val.adr	 0,l4817	; CD	LOCAL
+	val.adr	 0,l457e	; CE	MACLIB
+	val.adr	 0,l4c05	; CF	REPT
+	val.adr	 0,l4c69	; D0	.REQUEST
+	val.adr	 0,l3ea6	; D1	.SALL
+	val.adr	 0,l4cd4	; D2	SUBTTL
+	val.adr	 0,l3eaa	; D3	.XALL
+	val.adr	 0,l4d96	; D4	.XCREF
+	val.adr	 0,l4060	; D5	.Z80
+	val.adr	 0,l44f2	; D6	IF0
+	val.adr	 0,l44f6	; D7	IF1
+	val.adr	 0,l44f9	; D8	IF2
+	val.adr	 0,l4509	; D9	IFDEF
+	val.adr	 0,l44d9	; DA	IFDIF
+	val.adr	 0,l44d4	; DB	IFIDN
+	val.adr	 0,l44de	; DC	IFB
+	val.adr	 0,l4531	; DD	IFF
+	val.adr	 0,l44e8	; DE	IFNB
+	val.adr	 0,l4518	; DF	IFNDEF
+	val.adr	 0,l4cbb	; E0	.PRINTX
+	val.adr	 0,l406e	; E1	DC
+	val.adr	 0,l4075	; E2	DEFZ
+	val.adr	 0,l43fc	; E3	BYTE
+	val.adr	 0,l4b9b	; E4	.RADIX
+	val.adr	 0,l4cf1	; E5	.TFCOND
+	val.adr	 0,l4cd4	; E6	$TITLE
+;
+; Jump vectors to l6392
+; Jump table 1.1 -> Requested ABS mode
+;
+l125c:
+	jp	IllConst	; l6392
+	jp	IllConst	; l6395
+	jp	Ini$ABS		; Ini$FO
+	jp	Con$ABS		; Con$Put
+	jp	ABS.Const	; l639e
+	jp	l54a8		; l63a1
+	jp	l53c0		; l63a4
+	jp	l5334		; l63a7
+	jp	IllConst	; l63aa
+	jp	l514b		; l63ad
+	jp	l3bc3		; l63b0
+	jp	IllConst	; l63b3
+	jp	IllConst	; l63b6
+	jp	IllConst	; l63b9
+	jp	l3c8b		; l63bc
+;
+; Jump table 1.2 -> Requested HEX mode
+;
+l1289:
+	jp	IllConst
+	jp	IllConst
+	jp	Ini$HEX
+	jp	Con$ABS
+	jp	ABS.Const
+	jp	l5447
+	jp	l5356
+	jp	l5249
+	jp	IllConst
+	jp	l514b
+	jp	l3bc3
+	jp	IllConst
+	jp	IllConst
+	jp	IllConst
+	jp	l3c8b
+;
+; Jump table 1.3 -> Requested REL-80 format
+;
+l12b6:
+	jp	WrSPC.opcode
+	jp	REL.Const
+	jp	Ini$REL
+	jp	Con$REL
+	jp	REL.Const
+	jp	l54a8
+	jp	l5371
+	jp	l5258
+	jp	l58e4
+	jp	l57a6
+	jp	l3bc3
+	jp	l573b
+	jp	l5740
+	jp	SPC.push
+	jp	l3c8b
+;
+; Jump table 1.4 -> Requested SLR format
+;
+l12e3:
+	jp	l59bc
+	jp	l54f4
+	jp	Ini$SLR
+	jp	Con$SLR
+	jp	SLR.Const
+	jp	IllConst
+	jp	l537c
+	jp	l5a7f
+	jp	l5975
+	jp	l57a6
+	jp	l3bc3
+	jp	l572f
+	jp	l5737
+	jp	l5966
+	jp	l3c8b
+;
+; Jump table 1.5
+;
+l1310:
+	jp	l59bc
+	jp	l3013
+	jp	OS
+	jp	l2ff4
+	jp	l2ff7
+	jp	OS
+	jp	l1399
+	jp	OS
+	jp	l596d
+	jp	IllConst
+	jp	l139e
+	jp	IllConst
+	jp	IllConst
+	jp	l3d5a
+	jp	l3c8f
+;
+; Jump table 1.6
+;
+l133d:
+	jp	ImRet
+	jp	ImRet
+	jp	ImRet
+	jp	Inc.y
+	jp	Inc.y
+	jp	OS
+	jp	ImRet
+	jp	OS
+	jp	Inc..y
+	jp	IllConst
+	ld	a,0fh
+ImRet:
+	ret
+	jp	ImRet
+	jp	ImRet
+	jp	ImRet
+	jp	Inc..y
+;
+; Jump table 2.1
+;
+l136a:
+	jp	l0d07		; FN 1	l63bf
+	jp	l0d32		; FN 2	l63c2
+	jp	l0bf5		; FN 3	l63c5
+	jp	l0d78		; FN 4	l63c8
+	jp	l0cf6		; FN 5	l63cb
+	jp	l0896		; FN 6	l63ce
+	jp	l4e2a		; FN 7	l63d1
+;
+; Jump table 2.2
+;
+l137f:
+	jp	Inc.y		; FN 1
+	jp	Inc..y		; FN 2
+	ret			; FN 3 --
+	nop
+	nop
+	jp	Inc..y		; FN 4
+	jp	Inc.y		; FN 5
+	ret			; FN 6 --
+	nop
+	nop
+	ret			; FN 7 --
+	nop
+	nop
+l1394	equ	$
+;
+; Increment IY by 2
+;
+Inc..y:
+	inc	iy
+;
+; Increment IY by 1
+;
+Inc.y:
+	inc	iy
+	ret
+l1399:
+	or	0a0h
+	jp	l5223
+l139e:
+	set	0,(hl)
+	ld	a,0fh
+	ret
+l13a3:
+	dw	0
+l13a5:
+	scf
+	ret
+;
+;
+;
+l13a7:
+	call	l1444		; May be RET, CALL or JP
+l13aa:
+	jr	nc,l13a5	; .. may be RET
+	push	hl
+	ex	de,hl
+	ld	hl,(l6690)
+	inc	hl
+	inc	hl
+	ld	(l6690),hl
+	dec	hl
+	scf
+	sbc	hl,de
+	jr	z,l13c8
+	ld	b,h
+	ld	c,l
+	ld	hl,(l6690)
+	dec	hl
+	ld	d,h
+	ld	e,l
+	dec	hl
+	dec	hl
+	lddr
+l13c8:
+	ld	hl,(l13a3)
+	inc	l
+	ld	a,(l68a4)
+	add	a,l
+	ld	b,0
+	ld	c,a
+	call	d.alloc_	; Allocate memory
+	pop	de
+	push	hl
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ld	hl,l1008
+	ldi
+	ldi
+	ldi
+	ld	a,(l688c)
+	or	a
+	jr	z,l13ef
+	ldi
+	ldi
+l13ef:
+	ld	hl,(TokStrt)	; Get start pointer
+	ldir			; .. unpack tokens
+	ld	hl,(l6692)
+	dec	hl
+	ld	(l6692),hl
+	ld	a,h
+	or	l
+	pop	hl
+	ret	nz
+	push	hl
+	ld	bc,l0400
+	call	alloc_		; Allocate memory
+	ld	hl,(DynPtr2)	; Get pointer
+	add	hl,bc		; .. bump
+	ld	(DynPtr2),hl
+	ld	hl,l0200
+	ld	(l6692),hl
+	exx
+	push	de
+	inc	d
+	inc	d
+	inc	d
+	inc	d
+	inc	h
+	inc	h
+	inc	h
+	inc	h
+	exx
+	pop	hl
+	ld	d,h
+	ld	e,l
+	ld	bc,(l6697)
+	sbc	hl,bc
+	jr	z,l1434
+	ld	b,h
+	ld	c,l
+	ld	h,d
+	ld	l,e
+	inc	d
+	inc	d
+	inc	d
+	inc	d
+	inc	bc
+	lddr
+l1434:
+	ld	hl,l6697+1
+	ld	a,(hl)
+	add	a,4
+	ld	(hl),a
+	ld	hl,TopPtr+1
+	ld	a,(hl)		; Get pages
+	add	a,4		; .. bump
+	ld	(hl),a
+	pop	hl
+	ret
+;
+;
+;
+l1444:
+	ld	hl,(TokStrt)	; Get start pointer
+	ld	(l146e),hl	; .. save
+	ld	bc,l6c4d	; Load top
+	ld	hl,(l6690)
+	ld	(l6a69),hl	; Unpack pointer
+	jr	l1459
+l1455:
+	ld	hl,(l6a69)
+	inc	bc
+l1459:
+	scf
+	sbc	hl,bc		; Test pointer reached
+	jr	z,l148c		; .. yeap
+	srl	h		; .. divide by two
+	rr	l
+	set	0,l		; .. make odd
+	add	hl,bc		; Position address
+	push	hl
+	ld	e,(hl)		; Fetch pointer
+	inc	hl
+	ld	d,(hl)
+	ld	hl,(l13a3)	; Get base
+	add	hl,de
+	ld	de,l6852
+l146e	equ	$-2
+l1470:
+	ld	a,(de)
+	cp	(hl)
+	jr	nz,l1481
+	inc	de
+	inc	hl
+	or	a
+	jr	nz,l1470
+	pop	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+$CrsEna:
+	jp	l1493		; RET if disabled
+$CrsVec	equ	$-2
+l1481:
+	jr	nc,l1489
+	pop	hl
+	ld	(l6a69),hl
+	jr	l1459
+l1489:
+	pop	bc
+	jr	l1455
+l148c:
+	or	ALL
+	scf
+	ld	hl,(l6a69)
+	ret
+;
+; 1st pass cross ref
+;
+l1493:
+	inc	hl
+	inc	hl
+	inc	hl
+	inc	(hl)
+	jr	z,l149d
+l1499:
+	dec	hl
+	dec	hl
+	dec	hl
+	ret
+l149d:
+	inc	hl
+	inc	(hl)
+	dec	hl
+	jr	l1499
+;
+; 2nd pass and one pass only cross ref
+;
+l14a2:
+	push	de
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	push	hl
+	push	de
+	ex	de,hl
+	ld	a,(hl)
+	inc	hl
+	or	(hl)
+	pop	de
+	jr	nz,l14cd
+	ld	hl,l6694
+	ld	a,($LIN.NR$)	; Test # statement
+	or	a
+	jr	nz,l14c7	; .. yeap
+	ld	hl,CurLine	; Get current line
+	ld	a,(l682d)	; Get flag
+	or	a
+	jr	z,l14c7		; .. zero
+	ld	hl,l636c
+l14c7:
+	ldi			; .. unpack line
+	ldi
+	ldi
+l14cd:
+	pop	hl
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	dec	hl
+	dec	hl
+	dec	hl
+	pop	de
+	ret
+;
+; Read line from file and convert to token
+;
+GetLine:
+	call	RdLine		; Read line
+	jp	CnvToken	; .. convert to token
+;
+; Get line from file
+;
+RdLine:
+	jp	.RdLine
+$LinVec	equ	$-2
+;
+; Real processing from file
+;
+.RdLine:
+	ld	a,(l6387)
+	cp	4
+	call	nz,l63c5
+	ld	a,_JP
+	ld	(l07f1),a
+	ld	a,(_rPage_)	; Get page count
+	or	a
+	ld	b,RecLng	; Set default length
+	jr	z,l14f9		; .. done
+	cp	RecLng		; Test max
+	jr	nc,l14f9
+	ld	b,a		; Truncate
+l14f9:
+	ld	hl,CurLine+2
+	call	IncBCD		; Increment current line
+	ld	hl,(l6870)
+	ld	c,NoMSB		; Set mask
+	ld	de,$SRCline$	; Init line
+	or	ALL		; Set all bits ?????????
+	jr	l1514
+l150b:
+	ld	a,(hl)		; Get from source
+@EIGHT@:
+	and	c		; .. mask or NOP
+	inc	hl
+	ld	(de),a		; Save to line
+	cp	' '		; Test control
+	jr	c,l1526
+l1513:
+	inc	e		; Bump pointer
+l1514:
+	djnz	l150b
+	jr	z,l1578
+	ld	a,(_rPage_+1)	; Count down pages
+	dec	a
+	ld	(_rPage_+1),a
+	jr	z,l1599		; .. get from file
+l1521:
+	xor	a
+	sub	e
+	ld	b,a
+	jr	l150b
+l1526:
+	cp	lf		; Test range
+	jr	c,l1513		; Allow some control
+	jr	z,l157f		; .. process \n
+	cp	eof		; Check end of file
+	jr	nz,l1513
+l1530:
+	ld	hl,(l6867)
+	ld	de,lfff2
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	a,e
+	or	d
+	jr	z,l156e
+	push	hl
+	push	de
+	push	bc
+	call	push.r		; Push regs
+	ld	a,(CurUsr)	; Get user
+	call	SetUsr		; .. log it
+	ld	de,(CurFCB)	; Get FCB
+	ld	a,(de)
+	or	a		; Test current drive
+	ld	c,.close
+	push	de
+	call	nz,BDOS		; Close file if not
+	pop	hl
+	ld	(hl),0
+	ld	a,(LogUsr.)
+	call	SetUsr		; Log user
+	call	pop.r		; Pop regs
+	pop	bc
+	pop	de
+	pop	hl
+	call	l163e
+	call	FCBtoStr	; Convert FCB to string
+	jp	RdLine		; .. next read
+l156e:
+	ld	hl,$SRCline$
+	ld	(hl),eof	; Clear line
+	inc	hl
+	ld	(hl),eot
+	scf			; .. indicate end
+	ret
+l1578:
+	ld	c,28
+	call	.ERROR
+	jr	l156e
+;
+; -->> Line Feed found
+;
+l157f:
+	inc	e
+	ld	a,eot
+	ld	(de),a		; Clear end of line
+	ld	(l6870),hl
+	ld	a,(_rPage_)	; Get page count
+	add	a,RecLng	; .. bump
+	sub	e		; Get difference
+	ld	(_rPage_),a
+	ld	hl,l6875
+	dec	(hl)
+	ret	nz
+	ld	(hl),10
+	jp	IsChar		; Process keyboard
+l1599:
+	push	de
+	push	bc
+	ld	a,1
+	ld	(l6875),a
+	ld	de,(CurFCB)	; Get FCB
+	ld	hl,FCBlen+3
+	add	hl,de		; .. point to buffer
+	ex	de,hl
+	call	Rd$File		; Read from disk
+	pop	bc
+	pop	de
+	jp	nz,l1521	; .. any read
+	jp	l1530		; .. nothing read
+;
+; Read from file
+; ENTRY	Reg HL points to FCB
+;	Reg DE points to disk buffer
+; EXIT	Zero set if nothing read
+;	Reg HL points to start of buffer
+;	Reg B  holds records read
+;
+Rd$File:
+	ld	(Rd$FCB$),hl	; Save FCB
+	ld	(Rd$DMA$),de	; .. and buffer
+	call	push.r		; Push regs
+	ld	a,(hl)
+	dec	a
+	call	SetDsk		; Log disk
+	ld	a,(CurUsr)
+	call	SetUsr		; .. and user
+	ld	a,($MULS$)	; Test multi sector enabled
+	or	a
+	jr	nz,l161a	; .. yeap
+	ld	b,@SEC@		; Set records
+	push	bc
+	ld	de,$-$
+Rd$DMA$	equ	$-2
+	jr	l15e0		; .. set disk buffer
+l15d7:
+	push	bc
+	ld	hl,(_DMA_)	; Get current buffer
+	ld	de,RecLng
+	add	hl,de		; .. bump
+	ex	de,hl
+l15e0:
+	call	SetDMA		; Set disk buffer
+	ld	de,$-$
+Rd$FCB$	equ	$-2
+	ld	c,.rdseq
+	call	BDOS		; Read sector
+	pop	bc
+	or	a		; Test end of file
+	jr	nz,l15f1	; .. yeap
+	djnz	l15d7
+l15f1:
+	ld	a,@SEC@
+	sub	b		; Calculate records read
+l15f4:
+	srl	a		; Get pages
+	jr	nc,l1603	; .. even
+	inc	a		; .. fix for even
+	ld	b,a
+	ld	a,(_rPage_)
+	add	a,RecLng	; .. fix lower part
+	ld	(_rPage_),a
+	ld	a,b
+l1603:
+	ld	(_rPage_+1),a	; Save pages
+	ld	a,(LogUsr.)
+	call	SetUsr		; Log user
+	call	pop.r		; Pop regs
+	ld	hl,(_rPage_)	; Get pages read
+	ld	a,h
+	or	a
+	ret	z		; .. none
+	ld	b,l
+	ld	hl,(Rd$DMA$)	; Return disk buffer
+	ret
+l161a:
+	ld	de,(Rd$DMA$)
+	call	SetDMA		; Set disk buffer
+	ld	de,(Rd$FCB$)
+	ld	c,.rdseq
+	call	BDOS		; Read sector
+	or	a		; Test success
+	ld	a,@SEC@
+	jr	z,l15f4		; .. yeap
+	ld	a,(OSver)	; Get OS version
+	dec	a
+	ld	a,h		; Get back result
+	jr	z,l163a		; .. skip CP/M+
+	rra			; MP/M returns upper bits
+	rra
+	rra
+	rra
+l163a:
+	and	RecMask		; .. mask result
+	jr	l15f4
+;
+;
+;
+l163e:
+	inc	hl
+	ld	c,(hl)
+	inc	hl
+	ld	b,(hl)
+	inc	hl
+	push	bc
+	push	de
+	ld	de,l686b
+	ld	bc,l000a
+	ldir
+	ld	de,lfff2
+	add	hl,de
+	pop	de
+	pop	bc
+	add	hl,bc
+	ld	(DynPtr2),hl	; Set pointer
+	ld	hl,l682d
+	dec	(hl)		; .. count down
+	ex	de,hl
+	ld	(l6867),hl
+	bit	7,(hl)
+	ld	hl,.RdLine	; Set default
+	jr	z,l1669
+	ld	hl,l323c	; Set ?????
+l1669:
+	ld	($LinVec),hl	; Set line processor
+	xor	a
+	ld	h,a
+	ld	l,a
+	ld	(l6844),hl
+	ld	(l687c),a
+	ld	hl,.FullToken
+	ld	($GetVec),hl	; Set token routine
+	ret
+

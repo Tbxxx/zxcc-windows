@@ -1,0 +1,61 @@
+	MACRO-80 3.44	09-Dec-81	PAGE	1
+
+
+                                ;This is an example of the "Hello World" program.
+                                ;Uses z80 assembler mnemonics.
+                                ;Intended for Macro-80 (m80.com) assembler
+                                ; Use z80 mnemonics
+                                .z80
+                                ;Absolute code mode
+  0000'                         ASEG
+                                
+  0005                          bdos	equ 5	; address of BDOS call
+  0002                          conout	equ 2	; console output function
+  0000                          reset	equ 0	; warm start BDOS function
+                                
+                                	org 100h ;cpm programs start address.
+                                
+  0100    21 0119               	ld hl, datastr		;HL = address of string.
+  0103    7E                    loop1: ld a, (hl)		;loop through datastr
+  0104    B7                    	or a				;set cpu flags.
+  0105    CA 0114               	jp z,gone			;if char = 0 done.
+  0108    5F                    	ld e, a 			;E = char to send.
+  0109    0E 02                 	ld c, conout 		;we want BDOS func 2.
+  010B    E5                    	push hl 			;save HL register.
+  010C    CD 0005               	call bdos 			;call BDOS function.
+  010F    E1                    	pop hl 				;restore HL register
+  0110    23                    	inc hl 				;point to next char.
+  0111    C3 0103               	jp loop1 			;do next char.
+                                ;Exit and return code
+  0114    0E 00                 gone: ld	c, reset	; bdos exit
+  0116    CD 0005               	call bdos;
+                                ; never gets here
+                                ;Data to send to console
+  0119    0D 0A 48 65           datastr: DB 13,10,'Hello, world from Z-80 assembly.',13,10,0
+  011D    6C 6C 6F 2C           
+  0121    20 77 6F 72           
+  0125    6C 64 20 66           
+  0129    72 6F 6D 20           
+  012D    5A 2D 38 30           
+  0131    20 61 73 73           
+  0135    65 6D 62 6C           
+  0139    79 2E 0D 0A           
+  013D    00                    
+                                	end
+	MACRO-80 3.44	09-Dec-81	PAGE	S
+
+
+Macros:
+
+Symbols:
+0005 	BDOS            0002 	CONOUT          0119 	DATASTR         
+0114 	GONE            0103 	LOOP1           0000 	RESET           
+
+
+
+No Fatal error(s)
+
+
+         
+  0125    6C 64 20 66           
+  0129    72 6F 6D 2

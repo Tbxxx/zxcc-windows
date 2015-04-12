@@ -1,0 +1,229 @@
+FORTRAN-80 Ver. 3.44 Copyright 1978-1981 (C) By Microsoft -- Bytes: 37958
+Created: 10-Dec-81
+1	      DOUBLE PRECISION PILOW,SLNGTH,PIUP,FACT
+2	        DOUBLE PRECISION K,SIDES,SUM,SSQ,TERM,TEMP
+3	        WRITE(5,198)
+*****	0000'	LXI	B,$$L
+*****	0003'	JMP	$INIT
+*****	0006'	LXI	D,198L
+*****	0009'	LXI	H,[05 00 00 00]
+*****	000C'	CALL	$W2
+4	198     FORMAT(/1X,'BOUNDS ON PI - DOUBLE PRECISION BINOMIAL THEOREM VER
+*****	000F'	CALL	$ND
+5	     1SION'//'   N     SIDES     SIDE LENGTH     PI - LOWER BOUND   PI-
+6	     2 UPPER BOUND')
+7	        SIDES=4.0
+8	        SUM=2.0
+9	        N=3
+10	1       SIDES=2.0*SIDES
+*****	0012'	LXI	H,[00 00 00 83]
+*****	0015'	CALL	$L1
+*****	0018'	CALL	$CK
+*****	001B'	LXI	H,SIDES
+*****	001E'	CALL	$T3
+*****	0021'	LXI	H,[00 00 00 82]
+*****	0024'	CALL	$L1
+*****	0027'	CALL	$CK
+*****	002A'	LXI	H,SUM
+*****	002D'	CALL	$T3
+*****	0030'	LXI	H,0003
+*****	0033'	SHLD	N
+11	        SSQ=SUM
+12	        SUM=0.0
+13	        TERM=.25*SSQ
+14	        K=1
+15	2       TEMP=TERM+SUM
+*****	0036'	LXI	H,[00 00 00 82]
+*****	0039'	CALL	$L1
+*****	003C'	CALL	$CK
+*****	003F'	LXI	H,SIDES
+*****	0042'	CALL	$MU
+*****	0045'	LXI	H,SIDES
+*****	0048'	CALL	$T3
+*****	004B'	LXI	H,SUM
+*****	004E'	CALL	$L3
+*****	0051'	LXI	H,SSQ
+*****	0054'	CALL	$T3
+*****	0057'	LXI	H,[00 00 00 00]
+*****	005A'	CALL	$L1
+*****	005D'	CALL	$CK
+*****	0060'	LXI	H,SUM
+*****	0063'	CALL	$T3
+*****	0066'	LXI	H,[00 00 00 7F]
+*****	0069'	CALL	$L1
+*****	006C'	CALL	$CK
+*****	006F'	LXI	H,SSQ
+*****	0072'	CALL	$MU
+*****	0075'	LXI	H,TERM
+*****	0078'	CALL	$T3
+*****	007B'	LXI	H,0001
+*****	007E'	CALL	$CC
+*****	0081'	LXI	H,K
+*****	0084'	CALL	$T3
+16	        IF(TEMP.LE.SUM) GOTO 4
+*****	0087'	LXI	H,TERM
+*****	008A'	CALL	$L3
+*****	008D'	LXI	H,SUM
+*****	0090'	CALL	$AU
+*****	0093'	LXI	H,TEMP
+*****	0096'	CALL	$T3
+*****	0099'	LXI	H,SUM
+*****	009C'	CALL	$SU
+*****	009F'	DCR	A
+*****	00A0'	ADI	81
+*****	00A2'	SBB	A
+*****	00A3'	STA	T:000002
+17	        SUM=TEMP
+*****	00A6'	ORA	A
+*****	00A7'	JNZ	4L
+18	        FACT=(2.0*K-1.00)/(K+1.0)
+19	        TERM=FACT*SSQ*TERM/8.0
+20	        K=K+1.0
+21	        GOTO 2
+*****	00AA'	LXI	H,TEMP
+*****	00AD'	CALL	$L3
+*****	00B0'	LXI	H,SUM
+*****	00B3'	CALL	$T3
+*****	00B6'	LXI	H,K
+*****	00B9'	CALL	$L3
+*****	00BC'	LXI	H,[00 00 00 81]
+*****	00BF'	CALL	$AR
+*****	00C2'	LXI	H,T:000003
+*****	00C5'	CALL	$T3
+*****	00C8'	LXI	H,[00 00 00 82]
+*****	00CB'	CALL	$L1
+*****	00CE'	CALL	$CK
+*****	00D1'	LXI	H,K
+*****	00D4'	CALL	$MU
+*****	00D7'	LXI	H,[00 00 00 81]
+*****	00DA'	CALL	$SR
+*****	00DD'	LXI	H,T:000003
+*****	00E0'	CALL	$DU
+*****	00E3'	LXI	H,FACT
+*****	00E6'	CALL	$T3
+*****	00E9'	LXI	H,TERM
+*****	00EC'	CALL	$L3
+*****	00EF'	LXI	H,SSQ
+*****	00F2'	CALL	$MU
+*****	00F5'	LXI	H,FACT
+*****	00F8'	CALL	$MU
+*****	00FB'	LXI	H,[00 00 00 84]
+*****	00FE'	CALL	$DR
+*****	0101'	LXI	H,TERM
+*****	0104'	CALL	$T3
+*****	0107'	LXI	H,T:000003
+*****	010A'	CALL	$L3
+*****	010D'	LXI	H,K
+*****	0110'	CALL	$T3
+22	4       SLNGTH=DSQRT(SUM)
+*****	0113'	JMP	2L
+23	        PILOW=0.5*SIDES*SLNGTH
+24	        PIUP=SIDES*SLNGTH/(2.0-SLNGTH)
+25	        WRITE(5,200) N,SIDES,SLNGTH,PILOW,PIUP 
+*****	0116'	LXI	H,SUM
+*****	0119'	CALL	DSQRT
+*****	011C'	LXI	H,SLNGTH
+*****	011F'	CALL	$T3
+*****	0122'	LXI	H,[00 00 00 80]
+*****	0125'	CALL	$L1
+*****	0128'	CALL	$CK
+*****	012B'	LXI	H,SIDES
+*****	012E'	CALL	$MU
+*****	0131'	LXI	H,SLNGTH
+*****	0134'	CALL	$MU
+*****	0137'	LXI	H,PILOW
+*****	013A'	CALL	$T3
+*****	013D'	LXI	H,[00 00 00 82]
+*****	0140'	CALL	$L1
+*****	0143'	CALL	$CK
+*****	0146'	LXI	H,SLNGTH
+*****	0149'	CALL	$SU
+*****	014C'	LXI	H,T:000003
+*****	014F'	CALL	$T3
+*****	0152'	LXI	H,SIDES
+*****	0155'	CALL	$L3
+*****	0158'	LXI	H,SLNGTH
+*****	015B'	CALL	$MU
+*****	015E'	LXI	H,T:000003
+*****	0161'	CALL	$DU
+*****	0164'	LXI	H,PIUP
+*****	0167'	CALL	$T3
+*****	016A'	LXI	D,200L
+*****	016D'	LXI	H,[05 00 00 00]
+*****	0170'	CALL	$W2
+26	        IF(N.EQ.20) STOP
+*****	0173'	LXI	D,N
+*****	0176'	LXI	H,[01 00 00 00]
+*****	0179'	MVI	A,02
+*****	017B'	CALL	$I0
+*****	017E'	LXI	B,00E5"
+*****	0181'	LXI	D,SIDES
+*****	0184'	LXI	H,[01 00 00 00]
+*****	0187'	MVI	A,05
+*****	0189'	CALL	$I3
+*****	018C'	CALL	$ND
+*****	018F'	LHLD	N
+*****	0192'	LXI	D,FFEC
+*****	0195'	DAD	D
+*****	0196'	MOV	A,L
+*****	0197'	RLC
+*****	0198'	ORA	L
+*****	0199'	ANI	7F
+*****	019B'	ORA	H
+*****	019C'	SUI	01
+*****	019E'	SBB	A
+*****	019F'	STA	T:000002
+*****	01A2'	ORA	A
+*****	01A3'	JZ	0000
+*****	01A6'	CALL	$ST
+27	        N=N+1
+*****	01A9'	202020202020
+28	        GOTO 1
+*****	01AF'	LHLD	N
+*****	01B2'	INX	H
+*****	01B3'	SHLD	N
+29	200     FORMAT(1X,I3,F9.0,F15.6,2F19.12)
+*****	01B6'	JMP	1L
+30	        END
+*****	01B9'	00 00 00 81 
+*****	01BD'	00 00 00 00 
+*****	01C1'	01 00 00 00 
+*****	01C5'	05 00 00 00 
+*****	01C9'	00 00 00 83 
+*****	01CD'	00 00 00 82 
+*****	01D1'	00 00 00 7F 
+*****	01D5'	00 00 00 84 
+*****	01D9'	00 00 00 80 
+
+Program Unit Length=01DD (477) Bytes
+Data Area Length=0105 (261) Bytes
+
+Subroutines Referenced:
+
+$I3			$I0			DSQRT			
+$INIT			$W2			$ND			
+$L1			$CK			$T3			
+$MU			$L3			$CC			
+$AU			$SU			$AR			
+$SR			$DU			$DR			
+$ST
+
+Variables:
+
+PILOW	0001"		SLNGTH	0009"		PIUP	0011"		
+FACT	0019"		K	0021"		SIDES	0029"		
+SUM	0031"		SSQ	0039"		TERM	0041"		
+TEMP	0049"		N	00DA"		T:000002	00DC"	
+T:000003	00DD"
+
+Labels:
+
+$$L	0006'		198L	0051"		1L	0036'		
+2L	0087'		4L	0116'		200L	00EB"
+
+
+00 00 80 
+
+Program Unit Length=01DD (477) Bytes
+Data Area Length=0105 (261) Bytes
+

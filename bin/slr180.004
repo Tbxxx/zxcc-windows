@@ -1,0 +1,3130 @@
+;
+;
+;
+l3d55:
+	and	0fh
+	jp	l63b9
+;
+;
+;
+l3d5a:
+	or	90h
+	call	l6395
+	jp	l39c0
+;
+; Get register
+; EXIT	Carry set if not a register
+;	Accu holds mapped registers
+;	0..7	->	B,C,..,A
+;	8,9	->	IX,IY
+;
+GetReg:
+	call	GetToken	; Get token
+	sub	10h		; Strip off reg offset
+	cp	18h-10h		; Test single regs
+	ccf
+	ret	nc		; .. yeap
+	add	a,10h		; .. bring back old
+l3d6d:
+	cp	2ch		; Test range
+	jr	nc,l3d95
+	cp	2ah
+	jr	c,l3d95
+	sub	2ah-8		; Strip off offset for (IX, (IY
+	push	af
+	call	GetToken	; Get token
+	cp	3ah		; Test +
+	jr	z,l3d84
+	cp	3bh		; .. should be -
+	jp	nz,SyntaxErr
+l3d84:
+	call	l35eb		; Get offset
+	call	GetToken	; Get token
+	cp	52h		; Test ) ] }
+	jr	nz,l3d90	; .. should be
+	pop	af
+	ret
+l3d90:
+	ld	c,24
+	jp	ERROR
+l3d95:
+	cp	2dh		; Test range IX, IY
+	jr	c,l3e0e
+	cp	2fh
+	jr	nc,l3e0e
+	sub	2dh-8		; Strip off offset
+	ld	hl,l6479
+	ld	c,0
+	ld	(hl),c
+	inc	hl
+	ld	(hl),c
+	inc	hl
+	ld	(hl),c
+	inc	hl
+	ld	(hl),0ffh
+	ret
+;
+;
+;
+l3dad:
+	call	GetToken	; Get token
+l3db0:
+	sub	10h		; Strip off register
+	cp	18h-10h		; Test valid range
+	ccf
+	ret	nc		; .. yeap
+	add	a,10h		; Fix for old value
+	cp	38h
+	jr	z,l3de4		; .. ??
+	jr	c,l3dce
+	cp	39h
+	jr	z,l3de4		; .. ??
+	cp	55h
+	jr	z,l3de4		; .. ([{
+	cp	49h
+	jr	c,l3de4
+	cp	4fh		; .. TYPE
+	jr	z,l3de4
+l3dce:
+	ld	l,a
+	ld	h,HIGH l0400
+	bit	7,(hl)
+	jr	z,l3d6d
+	ld	de,(TokStrt)	; Get start of token
+	ld	a,(de)
+	cp	57h		; Test range
+	jr	c,l3d6d
+	set	6,(hl)
+	ex	de,hl
+	call	GetLabel	; Get label
+l3de4:
+	call	l35eb
+	ld	a,(l667f)
+	cp	3
+	ld	a,0ah
+	scf
+	ccf
+	ret
+l3df1:
+	call	GetToken	; Get token
+	sub	1ah		; Strip off reg pairs
+	jr	c,l3e0c		; .. normal regs
+	cp	1ch-1ah
+	jr	c,l3e2b		; .. BC or DE
+	cp	1eh-1ah
+	jr	c,l3e0c		; .. HL or AF
+	jr	nz,l3e05	; .. not SP
+	ld	a,30h		; Map to (DE) ?????
+	ret
+l3e05:
+	cp	1fh-1ah
+	jr	nz,l3e0c	; .. not IX
+	ld	a,20h		; .. map to IY ?????
+	ret
+l3e0c:
+	add	a,1ah		; Add to original
+l3e0e:
+	ld	(l647a),hl
+	ld	(l6479),a
+	cp	36h		; Test new line
+	scf
+	ret	nz		; .. nope
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+	ret
+l3e20:
+	call	GetToken	; Get token
+	sub	1ah		; Test range BC 
+	jr	c,l3e0c
+	cp	1dh-1ah+1	; .. to ACCU
+	jr	nc,l3e0c
+l3e2b:
+	add	a,a
+	add	a,a
+	add	a,a
+	add	a,a
+	ret
+l3e30:
+	call	GetToken	; Get token
+	sub	1ah		; Test range BC
+	jr	c,l3e0c
+	cp	1bh-1ah+1	; .. to DE
+	jr	c,l3e2b
+	cp	1eh-1ah		; .. SP is allowed
+	jr	c,l3e0c
+	jr	nz,l3e44
+	ld	a,30h		; .. set stack
+	ret
+l3e44:
+	cp	20h-1ah		; IY is allowed, too
+	jr	nz,l3e0c
+	ld	a,' '
+	ret
+l3e4b:
+	call	GetToken	; Get token
+l3e4e:
+	sub	1ah		; Strip off offset
+	jr	c,l3e0c		; .. simple regs
+	cp	1dh-1ah
+	jr	c,l3e2b		; .. normal reg pairs
+	cp	1eh-1ah
+	jr	nz,l3e0c	; .. not SP
+	ld	a,30h		; .. map to (DE) ?????
+	ret
+;
+;
+;
+l3e5d:
+	add	a,21h		; .. add C.C. offset
+	jr	l3e0e
+;
+; Process condition code
+; EXIT	Carry set if no C.C. found
+;	Accu holds code on its right place
+;
+GetCC:
+	call	GetToken	; Get token
+l3e64:
+	cp	11h		; Test reg C
+	jr	z,l3e74		; .. map it
+	sub	21h		; Subtract offset
+	jr	c,l3e5d		; .. no condition code
+	cp	29h-21h
+	jr	nc,l3e5d	; .. dtto.
+	add	a,a		; Shift into right position
+	add	a,a
+	add	a,a
+	ret
+l3e74:
+	ld	a,8*(24h-21h)	; Return condition CARRY
+	ret
+l3e77:
+	call	GetToken	; Get token
+l3e7a:
+	cp	1fh		; Test IX
+	jp	c,l3e0e
+	cp	21h
+	jp	nc,l3e0e
+	or	a
+	ret
+l3e86:
+	call	GetToken	; Get token
+	cp	16h		; Test (HL)
+	ret	z
+	cp	2dh		; .. (IX)
+	ret	z
+	cp	2eh		; .. (IY)
+	ret	z
+	jp	l3e0e
+;
+; Pseudo code : ASEG
+;
+l3e95:
+	call	l4b80
+	call	l4041
+	xor	a
+	ld	hl,(l67c7)
+	jp	l4d9c
+;
+; Pseudo code : .LALL
+;
+l3ea2:
+	ld	a,1		; .LALL
+	jr	l3eac
+;
+; Pseudo code : .SALL
+;
+l3ea6:
+	ld	a,4		; .SALL
+	jr	l3eac
+;
+; Pseudo code : .XALL
+;
+l3eaa:
+	ld	a,2		; .XALL
+l3eac:
+	ld	(_MACRO_),a	; Set macro list
+	ret
+;
+; Pseudo code : .ACCEPT
+;
+l3eb0:
+	ld	a,0ffh
+	ld	(l688b),a
+	ld	(l6aa8),a
+	call	GetToken	; Get token
+	cp	56h		; Test string
+	jr	nz,l3ece	; .. nope
+	ld	de,l6aa8
+	call	ldir.8		; Copy message
+	ld	a,eot
+	ld	(de),a		; .. set end
+	call	l2fe9
+	call	GetToken	; Get token
+l3ece:
+	call	l4331
+	ld	(l684b),hl
+	ld	a,(hl)
+	and	0fh
+	ld	c,a
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	ld	a,(Pass)
+	and	1		; Test pass
+	ld	a,c
+	jp	nz,l43bd	; .. 2nd pass
+	ex	de,hl
+	dec	hl
+	dec	hl
+	ld	a,(hl)
+	or	a
+	jp	m,l4329
+	and	0fh
+	cp	0fh
+	jp	z,l4329
+	ld	a,(l6aa8)
+	inc	a
+	jr	nz,l3f0a
+	ld	de,l6aa8
+	call	l55a4
+	ex	de,hl
+	ld	(hl),' '
+	inc	hl
+l3f05:
+	ld	(hl),'?'
+	inc	hl
+	ld	(hl),-1
+l3f0a:
+	ld	hl,l6aa8
+	call	PutStr		; Print string
+	ld	hl,l6aa8
+	ld	(hl),50
+	ex	de,hl
+	ld	c,.rdcon
+	call	.BDOS		; Read console buffer
+	ld	hl,l090b
+	call	PutStr		; .. close input
+	ld	hl,l6aa9
+	ld	a,(hl)		; Get length
+	or	a
+	dec	hl
+	jr	z,l3f05
+	ld	(hl),tab	; Overwrite 1st
+	inc	hl
+	ld	(hl),tab
+	inc	hl
+	ld	c,a
+	ld	b,0
+	add	hl,bc
+	ld	(hl),cr
+	inc	hl
+	ld	(hl),lf
+	inc	hl
+	ld	(hl),-1
+	ld	hl,l6aa8
+	call	.CnvToken	; Convert to token
+	call	l4215
+	jp	l43bd
+;
+; Pseudo code : COMMON
+;
+l3f47:
+	call	l4061
+	call	l4041
+	call	.PartToken	; Get token
+	cp	3dh		; Test /
+	jp	nz,l3fe7
+	ld	hl,(TokPtr)	; Get token pointer
+	push	hl
+	ld	b,17
+	ld	a,56h		; Set search for string
+l3f5d:
+	inc	hl
+	cp	(hl)
+	jr	nc,l3f76
+	djnz	l3f5d
+	ld	(hl),0
+	push	hl
+l3f66:
+	inc	hl
+	cp	(hl)
+	jr	c,l3f66
+	ld	a,(hl)
+	cp	3dh		; Test /
+	jr	nz,l3fe7
+	ld	(TokPtr),hl	; Set pointer
+	pop	hl
+	inc	b
+	jr	l3f80
+l3f76:
+	ld	a,(hl)
+	cp	'='
+	jr	nz,l3fe7
+	ld	(hl),0		; Set end
+	ld	(TokPtr),hl	; .. save pointer
+l3f80:
+	ld	a,11h
+	sub	b
+	ld	(l3fec),a
+	pop	bc
+	inc	bc
+	ld	hl,l6813
+l3f8b:
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	inc	hl
+	ex	de,hl
+	ld	a,h
+	or	l
+	jr	z,l3fd0
+	push	bc
+l3f95:
+	ld	a,(bc)
+	cp	(hl)
+	inc	hl
+	inc	bc
+	jr	nz,l3fcc
+	or	a
+	jr	nz,l3f95
+	pop	bc
+l3f9f:
+	ex	de,hl
+	ld	de,l680f
+	sbc	hl,de
+	push	hl
+	add	hl,hl
+	ld	de,l67c7
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	ld	a,($COMM.0$)	; Test COMMON back 0000
+	or	a
+	jr	z,l3fb8		; ..nope
+	ld	hl,0		; .. set 0
+l3fb8:
+	pop	de
+	ld	a,e
+	rra
+	cp	0fh
+	jp	c,l4d9c
+	ld	hl,l682b
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	ld	c,13
+	jp	ERROR
+l3fcc:
+	pop	bc
+	ex	de,hl
+	jr	l3f8b
+l3fd0:
+	push	de
+	push	bc
+	ld	a,(l3fec)
+	ld	c,a
+	inc	c
+	ld	b,0
+	call	d.alloc_	; Allocate memory
+	ex	de,hl
+	dec	hl
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	pop	hl
+	ldir
+	pop	de
+	jr	l3f9f
+l3fe7:
+	ld	c,26
+	jp	ERROR
+l3fec:
+	db	0
+;
+; Pseudo code : .COMMENT
+;
+l3fed:
+	call	l07ee
+	call	.PartToken
+	cp	36h		; Test empty line
+	ret	z		; .. skip
+	call	l33a1
+	inc	bc
+	ld	a,(bc)
+	ld	e,a
+l3ffc:
+	inc	bc
+	ld	a,(bc)		; Get character
+	cp	e		; .. compare
+	jp	z,l4c20		; .. end of .COMMENT
+	cp	cr
+	jr	nz,l3ffc	; .. skip line
+	push	de
+	call	RdLine		; Read next line
+	call	l07f1
+	pop	de
+	ld	bc,$SRCline$	; Get line
+	ld	a,(bc)
+	cp	eof		; Test end of file
+	dec	bc
+	jr	nz,l3ffc	; .. nope, try next
+	ret
+;
+; Pseudo code : .CREF
+;
+l4018:
+	ld	a,(_OPT_)
+	and	1 SHL _CROSS	; Test cross reference
+	ret	z		; .. nope
+	ld	hl,l1493
+	ld	a,(Pass)	; Test pass
+	or	a
+	jr	z,l402a		; .. 1st pass
+	ld	hl,l14a2
+l402a:
+	ld	($CrsVec),hl	; Set address
+	ld	a,_JP
+	ld	($CrsEna),a	; Enable cross ref
+	ret
+;
+; Pseudo code : DSEG
+;
+l4033:
+	call	l4061
+	call	l4041
+	ld	a,2
+	ld	hl,(l67cf)
+	jp	l4d9c
+l4041:
+	ld	a,($REL$)	; Get mode
+	add	a,a		; .. as index
+	add	a,a
+	ld	hl,l67c7
+	ld	c,a
+	ld	b,0
+	add	hl,bc
+	push	iy
+	pop	bc
+	ld	(hl),c
+	inc	hl
+	ld	(hl),b
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	or	a
+	sbc	hl,bc
+	ret	nc
+	ex	de,hl
+	ld	(hl),b
+	dec	hl
+	ld	(hl),c
+;
+; Pseudo code : .Z80 -- Dummy
+;
+l4060:
+	ret
+l4061:
+	call	l4b80
+l4064:
+	ld	a,(_OPT_)
+	or	a		; Test relocatable
+	ret	m		; .. yeap
+	ld	c,12
+	jp	ERROR
+;
+; Pseudo code : DC
+;
+l406e:
+	ld	hl,l414a
+	ld	a,2		; Set mode
+	jr	l407d
+;
+; Pseudo code : DEFZ
+;
+l4075:
+	ld	a,1
+	jr	l407a
+;
+; Pseudo code : DB
+;
+l4079:
+	xor	a
+l407a:
+	ld	hl,Con$Put	; Set code
+l407d:
+	ld	(l4148),hl
+	ld	(ConPag),a	; Init console page
+	ld	hl,l0100
+	ld	(l680f),hl
+	ld	a,(l6879)
+	or	a
+	jr	z,l409a
+	xor	a
+	ld	(l6879),a
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+l409a:
+	ld	a,0ffh
+	ld	(l680d),a
+l409f:
+	call	GetToken	; Get token
+	cp	50h		; Test ,
+	jr	nz,l40ac	; .. nope
+	ld	(l6865),iy
+	jr	l409f
+l40ac:
+	cp	36h		; Test end of line
+	jr	z,l40ca
+	cp	56h		; .. string
+	jr	nz,l40c2
+	ld	b,(hl)
+l40b5:
+	inc	hl
+	ld	a,(hl)
+	call	l4147
+	djnz	l40b5
+	inc	hl
+	ld	(TokPtr),hl	; Set token pointer
+	jr	l409f
+l40c2:
+	call	l35eb
+	call	l4120
+	jr	l409f
+l40ca:
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+	xor	a
+	ld	(l680d),a
+	ld	hl,ConPag
+	ld	a,(hl)		; Get console page
+	ld	(hl),0		; .. clear
+	or	a		; Test any line
+	ret	z		; .. nope
+	dec	a
+	jp	z,Con$Put	; Put 00 to file
+	ld	hl,(l680f)
+	dec	h
+	ret	z
+	ld	a,l
+	or	80h
+	dec	h
+	jp	nz,Con$Put	; Put to file
+	call	l3081
+	ld	a,(l647c)
+	inc	a
+	jr	nz,l4107
+	ld	a,(l6479)
+	or	a
+	jr	nz,l4107
+	ld	a,(l647a)
+	or	80h
+	ld	(l647a),a
+	jp	l3bf1
+l4107:
+	ld	hl,l4119
+	ld	bc,l4120-l4119
+	ldir
+	ld	hl,l6479
+	ld	a,(hl)
+	or	90h
+	ld	(hl),a
+	jp	l3bf1
+l4119:
+	db	90h,80h,0,0b6h,0,0,0ffh
+l4120:
+	ld	a,(ConPag)	; Get console page
+	cp	2		; Test two lines
+	jp	nz,l3bf1	; .. nope
+	ld	hl,(l680f)
+	dec	h
+	jr	z,l413d
+	dec	h
+	jr	z,l4137
+	ld	a,l
+	call	Con$Put		; Put to file
+	jr	l413d
+l4137:
+	call	l3059
+	jp	l3bf1
+l413d:
+	call	l3089
+	ld	hl,CtrlArr	; Init control l0200 ????
+	ld	(l680f),hl
+	ret
+l4147:
+	jp	Con$Put		; Put to file
+l4148	equ	$-2
+l414a:
+	ld	c,a
+	push	hl
+	push	bc
+	ld	hl,(l680f)
+	ld	b,0
+	ld	(l680f),bc
+	dec	h
+	ld	a,l
+	jr	z,l415d
+	dec	h
+	jr	z,l4163
+l415d:
+	pop	bc
+	pop	hl
+	ret	z
+	jp	Con$Put		; .. put to file
+l4163:
+	call	l3081
+	call	l3bf1
+	pop	bc
+	pop	hl
+	ret
+;
+; Pseudo code : DS
+;
+l416c:
+	call	l41e2
+	push	hl
+	call	GetToken	; Get token
+	cp	50h		; Test comma
+	jr	nz,l41b8
+	call	l35e8
+	ld	a,(Pass)	; Test pass
+	or	a
+	jr	z,l41b8		; .. 1st pass
+	pop	hl
+	ld	a,h
+	or	l
+	jr	z,l41b9
+	ld	b,l
+	ld	c,h
+	inc	b
+	dec	b
+	jr	z,l418c
+	inc	c
+l418c:
+	ld	a,(l647c)
+	inc	a
+	jr	nz,l41ad
+	ld	a,(l6479)
+	and	0fh
+	jr	nz,l41ad
+	ld	hl,(l647a)
+	inc	h
+	jr	z,l41a3
+	dec	h
+	call	nz,l3bff
+l41a3:
+	ld	a,l
+	call	Con$Put		; Put to file
+	djnz	l41a3
+	dec	c
+	jr	nz,l41a3
+	ret
+l41ad:
+	push	bc
+	call	l3bf1
+	pop	bc
+	djnz	l41ad
+	dec	c
+	jr	nz,l41ad
+	ret
+l41b8:
+	pop	hl
+l41b9:
+	ld	a,0ffh
+	ld	(l680d),a
+	xor	a
+	call	l63d1
+	xor	a
+	ld	(l680d),a
+	push	iy
+	pop	de
+	add	hl,de
+	ld	a,($REL$)	; Get mode
+	jp	l4d9c
+l41d0:
+	ld	a,0ffh
+	ld	(l6804),a
+	call	l41e2
+	xor	a
+	ld	(l6804),a
+	ret
+l41dd:
+	call	l35eb
+	jr	l41e5
+l41e2:
+	call	l35e8
+l41e5:
+	ld	a,(l647c)
+	inc	a
+	jr	nz,l41f1
+	ld	a,(l6479)
+	or	a
+	jr	z,l420c
+l41f1:
+	ld	a,(l6804)
+	or	a
+	jr	z,l4204
+	ld	a,($NO.IF1$)	; Test IF errors in pass 1
+	or	a
+	jr	z,l4204		; .. nope
+	ld	a,(Pass)	; Test pass
+	and	1
+	xor	1		; .. zero is 2nd pass
+l4204:
+	call	z,l443e
+	scf
+	ld	hl,0
+	ret
+l420c:
+	ld	hl,(l647a)
+	ret
+l4210:
+	call	l35eb
+	jr	l4218
+l4215:
+	call	l35e8
+l4218:
+	ld	a,(l647c)
+	inc	a
+	jr	nz,l41f1
+	ld	a,(l6479)
+	cp	0fh
+	jr	nc,l41f1
+	or	a
+	jr	l420c
+;
+; Pseudo code : DW
+;
+l4228:
+	call	GetToken	; Get token
+	cp	56h
+	jr	nz,l4246
+	ld	b,(hl)
+	inc	b
+	srl	b
+l4233:
+	inc	hl
+	ld	c,(hl)
+	inc	hl
+	ld	a,(hl)
+	call	Con$Put		; Put word to file
+	ld	a,c
+	call	Con$Put		; .. lo part
+	djnz	l4233
+	inc	hl
+	ld	(TokPtr),hl	; Set token pointer
+	jr	l424c
+l4246:
+	call	l35eb
+	call	l63bc
+l424c:
+	call	GetToken	; Get token
+	cp	50h		; Test comma
+	jp	nz,l40ca
+	ld	(l6865),iy
+	jr	l4228
+;
+; Pseudo code : .DEPHASE
+;
+l425a:
+	ld	hl,l6811
+	ld	a,(hl)
+	or	a
+	jr	z,l427e
+	ld	(hl),0
+	push	iy
+	pop	de
+	ld	hl,(l6683)
+	add	hl,de
+	ld	de,(l6686)
+	or	a
+	sbc	hl,de
+	push	hl
+	pop	iy
+	ld	(l6865),hl
+	ld	a,(l6682)
+	ld	($REL$),a	; Set mode
+	ret
+l427e:
+	ld	c,15
+	jp	.ERROR
+;
+; Pseudo code : ?????
+;
+l4283:
+	ld	a,(l687c)
+	or	a
+	jr	nz,l4297
+	ld	hl,(l686b)
+	ld	a,h
+	or	l
+	jr	z,l42e6
+	dec	hl
+	ld	(l686b),hl
+	jp	l4567
+l4297:
+	ld	hl,(l6844)
+	dec	hl
+	ld	a,h
+	or	l
+	ret	nz
+	ld	(l6844),hl
+	jp	l454f
+;
+; Pseudo code : END
+;
+l42a4:
+	call	GetToken	; Get token
+	cp	36h		; Test new line
+	jr	z,l42b4		; .. yeap
+	call	l4210
+	ld	(XFER),hl	; Set transfer address
+	ld	(l6832),a
+l42b4:
+	ld	hl,(l6867)
+	ld	de,lfff2
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	a,e
+	or	d
+	jr	z,l42c7
+	call	l163e
+	jr	l42b4
+l42c7:
+	ld	hl,l42d8
+	ld	(l6870),hl
+	ld.hl	1,3
+	ld	(_rPage_),hl	; Init read pages
+	jp	l4b80
+
+	db	1ah,1ah
+l42d8:
+	db	1ah
+l42d9:
+	db	1ah,1ah
+
+;
+; Pseudo code : ENDIF
+;
+l42db:
+	ld	a,(l687c)
+	or	a
+	jr	nz,l42f0
+	ld	hl,(l686b)
+	ld	a,h
+	or	l
+l42e6:
+	ld	c,19
+	jp	z,ERROR
+	dec	hl
+	ld	(l686b),hl
+	ret
+l42f0:
+	ld	hl,(l6844)
+	dec	hl
+	ld	(l6844),hl
+	ld	a,h
+	or	l
+	ret	nz
+	jp	l4556
+;
+; Pseudo code : ENDM	??????
+;
+l42fd:
+	ld	c,18
+	jp	ERROR
+;
+; Pseudo code : ENTRY
+;
+l4302:
+	call	l4064
+l4305:
+	call	l432e
+	call	l431a
+	call	GetToken	; Get token
+	cp	50h		; Test comma
+	jr	z,l4305		; .. yeap
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+	ret
+l431a:
+	ld	a,(hl)
+	and	0fh
+	cp	0fh
+	jr	z,l4324
+	set	5,(hl)
+	ret
+l4324:
+	ld	c,2
+	jp	.ERROR
+l4329:
+	ld	c,2		; *** UNUSED IN SMM.001 ***
+	jp	ERROR
+l432e:
+	call	GetToken	; Get token
+l4331:
+	call	l4338
+	ret	nz
+	jp	l0922
+l4338:
+	cp	39h		; Test ???
+	jr	z,l435d
+	ld	h,HIGH l0400
+	ld	l,a
+	ld	a,(l01b5)
+	or	a
+	jr	nz,l434a
+	inc	b
+	dec	b
+	jr	z,l434a
+	inc	h
+l434a:
+	bit	7,(hl)
+	jr	z,l4369
+	ld	de,(TokStrt)	; Get start of token
+	ld	a,(de)
+	cp	57h		; .. test range
+	jr	c,l4369
+	set	6,(hl)
+	ex	de,hl
+	call	GetLabel	; Get label
+l435d:
+	ld	a,(hl)
+	cp	0f0h
+	ret	nz
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	dec	a
+	ld	a,(hl)
+	ret
+l4369:
+	ld	c,3
+	call	.ERROR
+	xor	a
+	ret
+;
+; Pseudo code : ASET
+;
+l4370:
+	ld	a,TRUE
+	jr	l4375
+;
+; Pseudo code : EQU
+;
+l4374:
+	xor	a
+l4375:
+	ld	(SetFlg),a	; Set flag
+	ld	a,0ffh
+	ld	(l688b),a
+	ld	hl,(l684b)
+	ld	a,h
+	or	l
+	jr	z,l4329
+	call	l35e8
+	ld	a,(SetFlg)	; Test flag
+	or	a
+	jr	z,l4396		; .. EQU
+	ld	hl,(l684b)
+	call	l435d
+	and	70h
+	ld	(hl),a
+l4396:
+	ld	a,(l6479)
+	ld	hl,(l647a)
+	cp	0fh
+	jr	c,l43bd
+	ld	a,(Pass)
+	or	a
+	jr	z,l43b6		; .. 1st pass
+	dec	a
+	jr	z,l43c6
+	ld	e,0e6h
+	ld	a,(SetFlg)	; Get flag
+	or	a
+	jr	z,l43b3		; .. EQU
+	ld	e,0e7h
+l43b3:
+	call	l3bca
+l43b6:
+	ld	hl,0
+	ld	(l684b),hl
+	ret
+l43bd:
+	ld	(l684e),hl
+	ld	(l684d),a
+	jp	l63d1
+l43c6:
+	call	l443e
+	jp	l63d1
+;
+; Pseudo code : EXITM
+;
+l43cc:
+	ld	a,(l682d)
+	or	a
+	jp	z,l42fd
+	ld	hl,l42d8
+	ld	(l6870),hl
+	ld	hl,(l6867)
+	ld	a,(hl)
+	or	a
+	ret	p
+	inc	a
+	ret	z
+	ld	de,l0006
+	add	hl,de
+	inc	a
+	jr	nz,l43ed
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	ret
+l43ed:
+	inc	hl
+	inc	hl
+	ld	de,l43f8
+	ex	de,hl
+	sbc	hl,de
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+l43f8:
+	ld	(hl),d
+	ret
+
+	dw	-1
+
+;
+; Pseudo code : BYTE
+;
+l43fc:
+	call	.PartToken
+	cp	0b4h		; Test EXTERN
+	jp	nz,SyntaxErr	; .. should be
+;
+; Pseudo code : EXTRN
+;
+l4404:
+	call	l4064
+l4407:
+	call	l432e
+	call	l441c
+	call	GetToken	; Get token
+	cp	50h		; Test ,
+	jr	z,l4407
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+	ret
+l441c:
+	or	a
+	jp	m,l4428
+	bit	5,a
+	jr	nz,l4428
+	or	0fh
+	ld	(hl),a
+	ret
+l4428:
+	ld	a,(Pass)
+	dec	a
+	ret	z		; .. end on pass 2
+	dec	a
+	jr	nz,l4436	; .. 1st pass
+	ld	a,(hl)
+	and	0fh
+	cp	0fh
+	ret	z
+l4436:
+	push	hl
+	ld	c,2
+	call	.ERROR
+	pop	hl
+	ret
+l443e:
+	ld	c,6
+	call	.ERROR
+	xor	a
+	ld	h,a
+	ld	l,a
+	ld	(l6479),a
+	ld	(l647a),hl
+	dec	a
+	ld	(l647c),a
+	inc	a
+	ret
+l4452:
+	call	.PartToken	; Get token
+	ld	bc,(TokStrt)	; Get start of token
+	dec	bc
+	call	l33a1
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token pointer
+	ld	h,b
+	ld	l,c
+	inc	hl
+	ret
+l4467:
+	call	l4452
+	call	l4488
+	push	de
+	ld	b,c
+	push	bc
+	cp	','
+	jr	nz,l44c6
+	call	l44bd
+	pop	af
+	pop	hl
+	cp	c
+	ret	nz
+	or	a
+	ret	z
+	ld	b,0
+l447f:
+	ld	a,(de)
+	inc	de
+	cpi
+	ret	nz
+	jp	pe,l447f
+	ret
+l4488:
+	call	l44c9
+	cp	'<'
+	jr	nz,l44c6
+	ld	a,($IF.SPC$)	; Test white space in IF
+	or	a
+	jr	z,l4499		; .. nope
+	call	l44c9
+	dec	hl
+l4499:
+	push	hl
+	ld	c,0ffh
+l449c:
+	ld	de,l0d3e
+l449f:
+	ld	a,(hl)
+	inc	hl
+	cp	d
+	jr	z,l44c6
+	inc	c
+	cp	e
+	jr	nz,l449f
+	call	l44c9
+	pop	de
+	cp	cr
+	ret	z
+	cp	';'
+	ret	z
+	cp	','
+	ret	z
+	push	de
+	or	a
+	sbc	hl,de
+	ld	c,l
+	add	hl,de
+	jr	l449c
+l44bd:
+	call	l4488
+	cp	cr
+	ret	z
+	cp	';'
+	ret	z
+l44c6:
+	jp	SyntaxErr
+l44c9:
+	ld	a,(hl)
+	inc	hl
+	cp	' '
+	jr	z,l44c9
+	cp	tab
+	ret	nz
+	jr	l44c9
+;
+; Pseudo code : IFIDN
+;
+l44d4:
+	call	l4467
+	jr	l4514
+;
+; Pseudo code : IFDIF
+;
+l44d9:
+	call	l4467
+	jr	l4523
+;
+; Pseudo code : IFB
+;
+l44de:
+	call	l4452
+	call	l44bd
+	ld	a,c
+	or	a
+	jr	l4514
+;
+; Pseudo code : IFNB
+;
+l44e8:
+	call	l4452
+	call	l44bd
+	ld	a,c
+	or	a
+	jr	l4523
+;
+; Pseudo code : IF0
+;
+l44f2:
+	ld	a,2		; One pass
+	jr	l44fb
+;
+; Pseudo code : IF1
+;
+l44f6:
+	xor	a		; .. 1st pass
+	jr	l44fb
+;
+; Pseudo code : IF2
+;
+l44f9:
+	ld	a,1		; .. 2nd pass
+l44fb:
+	ld	hl,Pass
+	cp	(hl)		; Test same pass
+	jr	l4514
+l4501:
+	call	l0df5
+	ld	a,0
+	ret	c
+	ld	a,(hl)
+	ret
+;
+; Pseudo code : IFDEF
+;
+l4509:
+	call	l4501
+	bit	7,a
+	jr	nz,l454f
+	and	0fh
+	cp	0fh
+l4514:
+	jr	z,l454f
+	jr	l4567
+;
+; Pseudo code : IFNDEF
+;
+l4518:
+	call	l4501
+	bit	7,a
+	jr	nz,l4567
+	and	0fh
+	cp	0fh
+l4523:
+	jr	z,l4567
+	jr	l454f
+l4527:
+	ld	a,($COND$)	; Test bit for TRUE FALSE
+	or	a
+	ret	z		; .. yeap
+	rr	l
+	sbc	hl,hl		; Fix
+	ret
+;
+; Pseudo code : IFF
+;
+l4531:
+	call	l41d0
+	xor	a
+	call	l63d1
+	call	l4527
+	ld	a,h
+	or	l
+	jr	z,l454f
+	jr	l4567
+;
+; Pseudo code : IF
+;
+l4541:
+	call	l41d0
+	xor	a
+	call	l63d1
+	call	l4527
+	ld	a,h
+	or	l
+	jr	z,l4567
+l454f:
+	ld	hl,(l686b)
+	inc	hl
+	ld	(l686b),hl
+l4556:
+	xor	a
+	ld	(l687c),a
+	ld	hl,.FullToken
+	ld	($GetVec),hl	; Set token vector
+	call	l07eb
+l4563:
+	pop	hl
+	jp	.ProcSRC	; Process line
+l4567:
+	ld	hl,(l6844)
+	inc	hl
+	ld	(l6844),hl
+	call	l07eb
+	ld	a,0ffh
+	ld	(l687c),a
+	ld	hl,.PartToken
+	ld	($GetVec),hl	; Set token vector
+	jr	l4563
+;
+; Pseudo code : MACLIB
+;
+l457e:
+	ld	a,(Pass)
+	cp	1		; Test 2nd pass
+	jr	nz,l4590	; .. nope, load file
+l4585:
+	xor	a
+	ld	(l6879),a
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token pointer
+	ret
+;
+; Pseudo code : INCLUDE
+;
+l4590:
+	call	l45c2
+	ld	a,(l01b5)
+	or	a
+	jr	nz,l45b3
+	ld	hl,SrcFCB+@drv	; Point to source name
+	ld	de,l45af
+	ld	b,4
+l45a1:
+	ld	a,(de)
+	inc	de
+	cp	(hl)
+	inc	hl
+	jr	nz,l45b3
+	djnz	l45a1
+	ld	a,0ffh
+	ld	(l6806),a
+	ret
+l45af:
+	db	'Z80 '
+l45b3:
+	call	l07eb
+	pop	hl
+	call	ResetF		; Reset files
+	jp	.ProcSRC	; .. go process line
+l45bd:
+	ld	c,22
+	jp	ERROR
+l45c2:
+	ld	hl,$$MAC
+	ld	de,SrcFCB+@drv+@nam
+	ldi			; Set extension .MAC
+	ldi
+	ldi
+	call	l4452
+l45d1:
+	xor	a
+	ld	(SrcFCB),a	; Clear drive
+	ld	de,SrcFCB+@drv
+	ld	b,@nam
+	inc	hl
+	ld	a,(hl)
+	cp	':'
+	dec	hl
+	dec	hl
+	jr	nz,l45f4
+	dec	de
+	inc	hl
+	ld	a,(hl)
+	sub	'A'-1
+	cp	'P'-'A'+1
+	jr	c,l45f1		; .. regular drive
+	sub	'a'-'A'
+	cp	'p'-'a'+1
+	jr	nc,l45bd
+l45f1:
+	ld	(de),a
+	inc	de
+	inc	hl
+l45f4:
+	call	l462c
+	jr	z,l4603
+	cp	'.'
+	jr	z,l4603
+	ld	(de),a
+	inc	de
+	djnz	l45f4
+	jr	l460a
+l4603:
+	ld	a,' '
+l4605:
+	ld	(de),a
+	inc	de
+	djnz	l4605
+	dec	hl
+l460a:
+	call	l462c
+	jr	z,l4626
+	cp	'.'
+	jr	nz,l45bd
+	ld	b,3
+l4615:
+	call	l462c
+	jr	z,l4620
+	ld	(de),a
+	inc	de
+	djnz	l4615
+	jr	l4627
+l4620:
+	ld	a,' '
+l4622:
+	ld	(de),a
+	inc	de
+	djnz	l4622
+l4626:
+	dec	hl
+l4627:
+	xor	a
+	ld	(l6879),a
+	ret
+l462c:
+	inc	hl
+	ld	a,(hl)
+	cp	61h
+	jr	c,l4638
+	cp	7bh
+	ret	nc
+	sub	' '
+	ret
+l4638:
+	cp	'!'
+	jr	c,l4674
+	cp	','
+	ret	z
+	cp	';'
+	ret
+l4642:
+	inc	hl
+	ld	a,(hl)
+	cp	5ch
+	jr	c,l4660
+	cp	9bh
+	jr	nc,l4674
+	add	a,0d4h
+	cp	':'
+	jr	c,l4654
+	add	a,7
+l4654:
+	cp	5bh
+	ret	c
+	add	a,6
+	cp	7bh
+	ret	nz
+	ld	a,5fh
+	or	a
+	ret
+l4660:
+	cp	'X'
+	jr	z,l4676
+	cp	5bh
+	jr	z,l4679
+	cp	'Y'
+	jr	z,l467c
+	cp	'Z'
+	jr	z,l467f
+	cp	'W'
+	jr	z,l4682
+l4674:
+	cp	a
+	ret
+l4676:
+	add	a,0cch
+	ret
+l4679:
+	add	a,0e5h
+	ret
+l467c:
+	add	a,0e6h
+	ret
+l467f:
+	add	a,0d4h
+	ret
+l4682:
+	add	a,0ceh
+	ret
+l4685:
+	ld	hl,alloc_	; Allocate memory
+	ld	(l4f01),hl
+	ld	hl,DynPtr2	; Set base
+	ld	(l4fe5),hl
+	call	l07eb
+	jr	l4699
+l4696:
+	call	l07f1
+l4699:
+	call	RdLine		; Read line
+	call	l4efb
+	jr	nc,l4696
+	call	l07f1
+	ld	hl,d.alloc_	; Save allocation vector
+	ld	(l4f01),hl
+	ld	hl,SymPtr	; Init pointer
+	ld	(l4fe5),hl
+	ld	bc,2
+	call	alloc_		; Allocate memory
+	ex	de,hl
+	ld	hl,(l6680)
+	or	a
+	sbc	hl,de
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ret
+l46c2:
+	call	l4c58
+	ret
+l46c6:
+	inc	hl
+	ld	a,(hl)
+	inc	a
+	jr	z,l46c2
+	dec	hl
+l46cc:
+	ld	a,(hl)
+	inc	a
+	jr	z,l46c2
+	ld	(l6680),hl
+	ld	hl,l323c
+	ld	($LinVec),hl	; Change vector
+	ld	bc,142		;;l008e
+	call	malloc_		; Allocate memory
+	ld	hl,(l6867)
+	ld	(hl),0fch	; Set IRPC opcode
+	inc	hl
+	ld	(hl),LOW  (l4722-1)
+	inc	hl
+	ld	(hl),HIGH (l4722-1)
+	inc	hl
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	ld	(hl),1
+	inc	hl
+	ld	d,h
+	ld	e,l
+	inc	de
+	inc	de
+	inc	de
+	inc	de
+	ld	bc,(l6680)
+	call	l3216
+	ld	a,(bc)
+	ld	(de),a
+	inc	de
+	xor	a
+	ld	(de),a
+	ex	de,hl
+	ld	h,b
+	ld	l,c
+	or	a
+	sbc	hl,de
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ld	de,l0077
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	add	hl,de
+	dec	hl
+	dec	hl
+	dec	hl
+	dec	hl
+	xor	a
+	cpdr
+	ld	(l6870),hl
+	ret
+;
+; Coded IRPC
+;
+l4722:
+	db	6eh,77h,75h,68h,null
+;
+; Pseudo code : IRPC
+;
+l4727:
+	ld	hl,l46cc
+	jr	l472f
+;
+; Pseudo code : IRP
+;
+l472c:
+	ld	hl,l47a4
+l472f:
+	call	l4736
+	pop	hl
+	jp	.ProcSRC	; Process line
+l4736:
+	push	hl
+	call	.PartToken	; Get token
+	ld	hl,1
+	ld	(l683e),hl
+	ld	bc,(TokStrt)	; Get start of token
+	dec	bc
+	ld	hl,l66a7
+	ld	de,l66e7
+	call	l49fa
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	inc	bc
+	ld	(TokStrt),bc	; Get start of token
+	ld	a,(bc)
+	cp	36h		; Test new line
+	jr	nz,l4762
+	ld	bc,l479a
+	jr	l4769
+l4762:
+	push	hl
+	push	de
+	call	l33a1
+	pop	de
+	pop	hl
+l4769:
+	push	de
+	call	IsEOL?		; Check line
+	ld	a,-1
+	ld	(de),a
+	inc	de
+	ld	hl,(DynPtr2)	; Get pointer
+	ld	(l6680),hl	; .. save
+	ex	de,hl
+	pop	de
+	or	a
+	sbc	hl,de
+	ld	b,h
+	ld	c,l
+	push	bc
+	inc	bc
+	call	alloc_		; Allocate memory
+	ld	(hl),0
+	inc	hl
+	ex	de,hl
+	dec	bc
+	ldir
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token pointer
+	call	l4685
+	ld	hl,(l6680)
+	pop	bc
+	or	a
+	sbc	hl,bc
+l479a:
+	ret
+	inc	a
+	ld	a,','
+l479e:
+	inc	hl
+	ld	a,(hl)
+	inc	a
+	jr	z,l47f2
+	dec	hl
+l47a4:
+	ld	(l6680),hl
+	ld	hl,l323c
+	ld	($LinVec),hl	; Change vector
+	ld	bc,142		;;l008e
+	call	malloc_		; Allocate memory
+	ld	hl,(l6867)
+	ld	(hl),0fdh	; Set IRP opcode
+	inc	hl
+	ld	(hl),LOW  (l47f6-1)
+	inc	hl
+	ld	(hl),HIGH (l47f6-1)
+	inc	hl
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	ld	(hl),1
+	inc	hl
+	ld	d,h
+	ld	e,l
+	inc	de
+	inc	de
+	inc	de
+	inc	de
+	ld	bc,(l6680)
+	dec	bc
+	call	IsEOL?		; Check line
+	ex	de,hl
+	ld	h,b
+	ld	l,c
+	or	a
+	sbc	hl,de
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ld	de,l0077
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	add	hl,de
+	dec	hl
+	dec	hl
+	dec	hl
+	dec	hl
+	xor	a
+	cpdr
+	ld	(l6870),hl
+	ret
+l47f2:
+	call	l4c58
+	ret
+;
+; Coded IRP
+;
+l47f6:
+	db	6eh,77h,75h,null
+;
+; Pseudo code : .LIST
+;
+l47fa:
+	ld	hl,l668d
+	ld	a,(hl)
+	inc	a
+	ret	z
+	ld	(hl),-1
+	ld	hl,l63d4
+	ld	de,l63bf
+	ld	bc,TokStrt-l63d4		;;l0015
+	ldir
+	xor	a
+	ld	(l08af),a
+	ret
+l4812:
+	dec	hl
+	ld	(TokPtr),hl	; Save token pointer
+	ret
+;
+; Pseudo code : LOCAL
+;
+l4817:
+	ld	hl,(l6867)
+	bit	7,(hl)
+	jp	z,l42fd
+	call	.PartToken	; Get token
+	ld	hl,(TokStrt)	; Get start of token 
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+l4829:
+	ld	hl,(TokPtr)	; Get token pointer
+l482c:
+	inc	hl
+	ld	a,(hl)
+	cp	35h		; Skip spaces
+	jr	z,l482c
+	cp	50h		; .. commas
+	jr	z,l482c
+	cp	36h		; Test new line
+	jr	z,l4812
+	cp	57h		; Test range
+	jp	c,SyntaxErr
+	ld	a,56h		; Set string
+	ld	(TokStrt),hl	; .. set start
+	ld	d,h
+	ld	e,l
+l4846:
+	inc	hl
+	cp	(hl)
+	jp	c,l4846
+	dec	hl
+	ld	(TokPtr),hl	; Set token pointer
+	inc	hl
+	sbc	hl,de
+	ld	a,l
+	ld	(l68a4),a
+	ld	bc,20		;; l0014
+	call	alloc_		; Allocate memory
+	ld	hl,(l6867)
+	ld	b,h
+	ld	c,l
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	a,d
+	or	e
+	jr	nz,l487b
+	push	hl
+	ld	hl,(DynPtr2)	; Get pointer
+	ld	de,l0013
+	add	hl,de
+	ld	(hl),a
+	sbc	hl,bc
+	ex	de,hl
+	pop	hl
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+l487b:
+	ex	de,hl
+	add	hl,bc
+	xor	a
+	ld	b,a
+	ld	c,a
+	jr	l4886
+l4882:
+	cpdr
+	dec	hl
+	dec	hl
+l4886:
+	cp	(hl)
+	jr	nz,l4882
+	ex	de,hl
+	ld	hl,(TokStrt)	; Get start of token
+	ld	a,(l68a4)
+	ld	b,a
+l4891:
+	ld	a,(hl)
+	inc	hl
+	ld	(de),a
+	dec	de
+	djnz	l4891
+	xor	a
+	ld	(de),a
+	dec	de
+	ld	hl,(l687f)
+	inc	hl
+	ld	(l687f),hl
+	ex	de,hl
+	ld	(hl),e
+	dec	hl
+	ld	(hl),d
+	dec	hl
+	ld	(hl),0
+	ld	(DynPtr2),hl	; .. save top
+	jp	l4829
+l48ae:
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	ld	(l684e),hl
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	a,(l688c)
+	or	a
+	jr	nz,l48c0
+	inc	hl
+l48c0:
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	push	hl
+	inc	de
+	inc	de
+	ld	hl,(SymPtr)	; Get pointer
+	xor	a
+	dec	hl
+	ld	(hl),a
+	dec	hl
+	ld	(hl),a
+	dec	hl
+	dec	hl
+	ex	de,hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	pop	hl
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	push	de
+	jp	l49b3
+l48dc:
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	ld	(l684e),hl
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	a,(l688c)
+	or	a
+	ld	c,a
+	jr	nz,l48ef
+	inc	hl
+l48ef:
+	ld	a,(hl)
+	inc	hl
+	or	(hl)
+	jr	nz,l492d
+	or	c
+	jr	z,l48f8
+	inc	hl
+l48f8:
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	dec	hl
+	dec	hl
+	jr	z,l4901
+	dec	hl
+l4901:
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	ex	de,hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	inc	de
+	push	de
+l490a:
+	call	.PartToken	; Get token
+	cp	36h		; Test end of line
+	jr	nz,l490a	; .. wait for it
+	pop	de
+l4912:
+	push	de
+	call	l07f1
+	call	RdLine		; Read line
+	pop	de
+	dec	de
+	ld	a,($SRCline$)	; Get start of line
+	cp	eof		; Test end of file
+	jr	z,l4926		; .. yeap
+	ld	a,d
+	or	e
+	jr	nz,l4912
+l4926:
+	ld	hl,0
+	ld	(l684b),hl
+	ret
+l492d:
+	push	hl
+	ld	d,(hl)
+	dec	hl
+	ld	e,(hl)
+	ex	de,hl
+	inc	hl
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	pop	hl
+	ld	a,d
+	or	e
+	jr	nz,l4901
+	ld	c,31
+	call	.ERROR
+	jr	l4926
+;
+; Pseudo code : MACRO
+;
+l4943:
+	call	.PartToken	; Get token
+	ld	(l6877),hl
+	cp	39h		; Test ??
+	jr	nz,l494f
+	ld	a,0ffh
+l494f:
+	ld	(l6879),a
+	xor	a
+	ld	(l687a),a
+	ld	hl,1
+	ld	(l683e),hl
+	ld	hl,(l684b)
+	ld	a,h
+	or	l
+	jp	z,l4329
+	ld	a,(Pass)	; Get pass
+	cp	1
+	jp	z,l48dc		; .. 2nd pass
+	ld	a,0f0h
+	ld	(l684d),a
+	ld	a,(hl)
+	cp	0f0h
+	jp	z,l48ae
+	push	hl
+	ld	bc,l000a
+	call	d.alloc_	; Allocate memory
+	ld	(l684e),hl
+	ex	de,hl
+	pop	hl
+	ldi
+	ldi
+	ldi
+	ex	de,hl
+	xor	a
+	ld	de,(SymPtr)	; Get pointer
+	dec	de
+	ld	(de),a
+	dec	de
+	ld	(de),a
+	dec	de
+	dec	de
+	push	de
+	ld	a,(l688c)
+	or	a
+	jr	nz,l499f
+	ld	(hl),0ffh
+	inc	hl
+l499f:
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	jr	z,l49a8
+	ld	(hl),0ffh
+	inc	hl
+l49a8:
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	ld	de,(l684b)
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+l49b3:
+	ld	hl,0
+	ld	(l687d),hl
+	ld	bc,l0004
+	call	d.alloc_	; Allocate memory
+	ld	de,l66e7
+	ld	hl,l66a7
+	ld	bc,(TokStrt)	; Get start of token
+	dec	bc
+l49ca:
+	call	l49fa
+	jr	nz,l49ca
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	ld	(TokPtr),bc	; Set token pointer
+	call	l07eb
+	jr	l49df
+l49dc:
+	call	l07f1
+l49df:
+	call	RdLine		; Read line
+	call	l4efb
+	jr	c,l49f1
+	ld	hl,l687d
+	inc	(hl)
+	jr	nz,l49dc
+	inc	hl
+	inc	(hl)
+	jr	l49dc
+l49f1:
+	pop	hl
+	ld	de,(l687d)
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ret
+l49fa:
+	inc	bc
+	ld	a,(bc)
+	cp	'6'
+	ret	z
+	cp	'5'
+	jr	z,l49fa
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	cp	'W'
+	jr	c,l4a20
+l4a0b:
+	ld	(de),a
+	inc	de
+	inc	bc
+	ld	a,(bc)
+	cp	'W'
+	jr	nc,l4a0b
+	ex	de,hl
+	ld	(hl),0
+	inc	hl
+	ex	de,hl
+	cp	50h		; Test comma
+	jr	z,l4a1d
+	dec	bc
+l4a1d:
+	or	ALL
+	ret
+l4a20:
+	ld	c,4
+	jp	ERROR
+;
+; Pseudo code : NAME
+;
+l4a25:
+	ld	hl,$$PRGN$$	; Point to name
+	ld	a,10h
+	call	l4a30
+	jp	l4cdc
+;
+;
+;
+l4a30:
+	push	hl
+	push	af
+	call	.PartToken	; Get token
+	cp	55h		; Test ( [ {
+	jr	z,l4a44		; .. yeap
+	ld	(l6879),a
+	ld	(l6877),hl
+	pop	af
+	pop	hl
+	jp	l4d62
+l4a44:
+	ld	hl,(TokPtr)	; Get token pointer
+	inc	hl
+	ld	a,(hl)
+	cp	56h		; Test string
+	jr	nz,l4a6d
+	inc	hl
+	ld	a,(hl)
+	ld	b,0
+	ld	c,a
+	pop	af
+	cp	c
+	jr	nc,l4a57
+	ld	c,a
+l4a57:
+	pop	de
+	inc	hl
+	ld	a,c
+	or	a
+	jr	z,l4a5f
+	ldir
+l4a5f:
+	inc	hl
+	ld	a,0ffh
+	ld	(de),a
+	ld	a,(hl)
+	ld	(TokPtr),hl	; Set token pointer
+	cp	52h		; Test ) ] }
+	ret	z
+	jp	SyntaxErr
+l4a6d:
+	pop	af
+	pop	hl
+	ld	(hl),0ffh
+	jp	SyntaxErr
+;
+; Pseudo code : .XLIST
+;
+l4a74:
+	ld	hl,l668d
+	ld	a,(hl)
+	or	a
+	ret	z
+	ld	a,(l08af)
+	or	a
+	ret	nz
+	inc	(hl)
+	ld	hl,l63bf
+	ld	de,l63d4
+	ld	bc,l63d4-l63bf	;;l0015
+	ldir
+	jp	DisXXX?		; Disable ???
+;
+; Pseudo code : ORG
+;
+l4a8e:
+	call	l4b80
+	call	l4041
+	call	GetToken	; Get token
+	cp	36h		; Test end of line
+	jr	z,l4ae9
+	ld	(l6a6b),iy
+	ld	a,($REL$)	; Get mode
+	ld	(l6a6d),a
+	ld	a,c
+	call	l4210
+	or	a
+	jr	nz,l4ae3
+	ld	a,($ORG.ABS$)	; Test ABS offset
+	or	a
+	jr	z,l4ab8		; .. nope
+	ld	a,($REL$)	; Get mode
+	or	a
+	jr	nz,l4ae3
+l4ab8:
+	push	hl
+	ld	hl,(l67c7)
+	call	l0a37
+	ld	de,TPA
+	jr	z,l4ac5
+	dec	d
+l4ac5:
+	sbc	hl,de
+	jr	z,l4ad5
+	ld	hl,(ABS.ORG)	; Get origin
+	inc	hl
+	ld	a,h
+	or	l
+	jr	nz,l4ad5	; .. no wrap
+	ld	(ABS.ORG),de	; .. set it
+l4ad5:
+	ld	hl,(ABS.ORG)
+	pop	de
+	scf
+	sbc	hl,de
+	ex	de,hl
+	jr	c,l4ae2
+	ld	(ABS.ORG),hl
+l4ae2:
+	xor	a
+l4ae3:
+	call	l63d1
+	jp	l4d9c
+l4ae9:
+	ld	hl,(l6a6b)
+	ld	a,(l6a6d)
+	jr	l4ae3
+;
+; Pseudo code : EJECT
+;
+l4af1:
+	call	GetToken	; Get token
+	cp	36h		; Test new page only
+	jr	z,l4b1f		; .. yeap
+	cp	50h		; Test comma
+	jr	z,l4b0e		; .. yeap, skip page length
+	call	l41dd
+	jr	c,l4b1f
+	ld	a,l
+	ld	(_LST.PAG_),a	; Set list page
+	call	GetToken	; Get token
+	cp	36h		; Test more
+	ret	z		; .. nope
+	call	l2fec
+l4b0e:
+	call	l41e2
+	jr	c,l4b1f
+	ld	a,l
+	ld	(_CON.WID_),a	; Set width
+	ld	a,0ffh
+	ld	(l6804),a
+	jp	l4d00
+l4b1f:
+	ld	a,(l08af)
+	or	a
+	ret	nz
+	call	l4b2a
+	jp	l4cdc
+l4b2a:
+	ld	a,(Pass)
+	or	a
+	ret	z		; .. 1st pass
+	ld	hl,l668f
+	ld	a,(_LST.PAG_)	; Get list page
+	cp	(hl)
+	ret	z
+	dec	a
+	ld	(hl),a
+	ld	a,($SUPPR$)	; Suppress PAGE, TITLE
+	or	a
+	ret	z		; .. nope
+	inc	(hl)		; .. count up
+	ret
+;
+; Pseudo code : .PHASE
+;
+l4b40:
+	call	l4b80
+	ld	a,(OS.Flg)	; Test warm vector saved
+	or	a
+	jr	z,l4b5a		; .. nope
+	ld	hl,(l639c)
+	push	hl
+	ld	hl,l4b56
+	ld	(l639c),hl
+	jp	Con$Put		; Put code to file
+l4b56:
+	pop	hl
+	ld	(l639c),hl
+l4b5a:
+	call	l4215
+	ld	hl,(l6865)
+	ld	(l6683),hl
+	ld	a,($REL$)	; Get mode
+	ld	(l6682),a
+	ld	iy,(l647a)
+	ld	(l6686),iy
+	ld	a,(l6479)
+	ld	(l6685),a
+	ld	($REL$),a	; Set mode
+	ld	a,0ffh
+	ld	(l6811),a
+	ret
+l4b80:
+	ld	a,(l6811)
+	or	a
+	ret	z
+	call	l425a
+	ld	c,16
+	jp	.ERROR
+;
+; Pseudo code : CSEG
+;
+l4b8d:
+	call	l4061
+	call	l4041
+	ld	a,1
+	ld	hl,(l67cb)
+	jp	l4d9c
+;
+; Pseudo code : .RADIX
+;
+l4b9b:
+	ld	a,(l6879)
+	or	a
+	jr	z,l4bac
+	xor	a
+	ld	(l6879),a
+	ld	hl,(TokStrt)	; Get start of token
+	dec	hl
+	ld	(TokPtr),hl	; .. to token pointer
+l4bac:
+	ld	a,10
+	call	SetRadix	; Set default radix 10
+	call	l41e2
+	call	l63d1
+	ld	a,h
+	or	a
+	jr	nz,l4bc7
+	ld	a,l
+	cp	16+1
+	jr	nc,l4bc7
+	cp	2
+	jr	c,l4bc7
+	jp	SetRadix	; Set radix
+l4bc7:
+	ld	c,8
+	jp	.ERROR
+;
+; Set radix and prepare conversion
+; ENTRY	Accu holds radix
+;
+SetRadix:
+	ld	(Radix),a	; Save radix
+	cp	16		; Test hex
+	ld	hl,Get$HEX
+	ld	de,Out$HEX
+	jr	z,l4bfd
+	cp	10		; .. decimal
+	ld	hl,Get$DEC
+	ld	de,Out$DEC
+	jr	z,l4bfd
+	cp	8		; .. octal
+	ld	hl,Get$OCT
+	ld	de,Out$OCT
+	jr	z,l4bfd
+	cp	2		; .. binary
+	ld	hl,Get$BIN
+	ld	de,Out$BIN
+	jr	z,l4bfd
+	ld	hl,Get$NUM
+	ld	de,Out$BIN
+l4bfd:
+	ld	(l0f02),hl	; Set up addresses
+	ld	(l3214),de
+	ret
+;
+; Pseudo code : REPT
+;
+l4c05:
+	call	l41e2
+	push	hl
+	ld	hl,0
+	ld	(l66a7),hl
+	inc	hl
+	ld	(l683e),hl
+	ld	hl,(DynPtr2)	; Get pointer
+	ld	(l6680),hl	; .. save
+	call	l4685
+	pop	hl
+	call	l4c24
+l4c20:
+	pop	hl
+	jp	.ProcSRC	; Process line
+l4c24:
+	ld	a,h
+	or	l
+	jr	z,l4c58
+	push	hl
+	ld	hl,l323c
+	ld	($LinVec),hl	; Change vector
+	ld	bc,22		;;l0016
+	call	malloc_		; Allocate memory
+	ld	hl,(l6867)
+	ld	(hl),0feh	; Set REPT opcode
+	pop	de
+	inc	hl
+	ld	(hl),LOW  (l4c64-1)
+	inc	hl
+	ld	(hl),HIGH (l4c64-1)
+	inc	hl
+	xor	a
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	inc	hl
+	dec	de
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	add	hl,de
+	dec	hl
+	dec	hl
+	ld	(l6870),hl
+	ret
+l4c58:
+	ld	hl,(DynPtr2)	; Get pointer
+	ld	e,(hl)		; .. fetch length
+	inc	hl
+	ld	d,(hl)
+	dec	hl
+	add	hl,de		; .. add
+	ld	(DynPtr2),hl	; .. set new top
+	ret
+;
+; Coded REPT
+;
+l4c64:
+	db	77h,6ah,75h,79h,null
+;
+; Pseudo code : .REQUEST
+;
+l4c69:
+	call	l4064
+	ld	a,(Pass)
+	or	a
+	jp	z,l4585		; .. 1st pass
+	call	l4452
+l4c76:
+	call	l45d1
+	push	hl
+	ld	bc,l000b
+	call	d.alloc_	; Allocate memory
+	ld	de,(l6883)
+	ld	(l6883),hl
+	ld	a,d
+	or	a
+	jr	nz,l4c8e
+	ld	de,l6878
+l4c8e:
+	ex	de,hl
+	ld	bc,@drv+@nam
+	add	hl,bc
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+	ld	hl,SrcFCB
+	ldir			; Copy file name
+	xor	a
+	ld	(de),a
+	inc	de
+	ld	(de),a
+	pop	hl
+	inc	hl
+l4ca1:
+	ld	a,(hl)
+	inc	hl
+	cp	' '
+	jr	z,l4ca1
+	cp	tab
+	jr	z,l4ca1
+	cp	','
+	ret	nz
+l4cae:
+	ld	a,(hl)
+	inc	hl
+	cp	' '
+	jr	z,l4cae
+	cp	tab
+	jr	z,l4cae
+	dec	hl
+	jr	l4c76
+;
+; Pseudo code : .PRINTX
+;
+l4cbb:
+	ld	hl,l6aa8
+	ld	a,120		;;78h
+	call	l4d62
+	ex	de,hl
+	ld	(hl),cr
+	inc	hl
+	ld	(hl),lf
+	inc	hl
+	ld	(hl),-1
+	ld	hl,l6aa8
+	call	PutStr		; Print
+	jr	l4cdc
+;
+; Pseudo code : SUBTTL and $TTTLE
+;
+l4cd4:
+	ld	hl,@MES@	; Point to message
+	ld	a,60		;;;'<'
+	call	l4a30
+;
+;
+;
+l4cdc:
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token pointer
+	xor	a
+	ld	(l6840),a
+	ld	a,($SUPPR$)	; Suppress PAGE, TITLE
+	or	a
+	ret	z		; .. nope
+	ld	a,_RET
+	ld	(l07f1),a	; Set return
+	ret
+;
+; Pseudo code : .TFCOND
+;
+l4cf1:
+	ld	hl,_FALSE_
+	ld	a,(hl)
+	cpl			; Toggle false conditionals
+	ld	(hl),a
+	ret
+;
+; Pseudo code : TITLE
+;
+l4cf8:
+	ld	a,eot
+	ld	(l6a6e),a
+	ld	(l63eb),a	; Set empty line
+l4d00:
+	ld	a,(_CON.WID_)	; Get console witdh
+	sub	MinWid		; Test length
+	jr	c,l4cdc		; .. too short to be filled
+	push	af
+	ld	a,($TOD.ENA$)	; Test TOD to be inserted
+	or	a
+	jr	z,l4d14		; .. nope
+	pop	af
+	sub	$TODlen		; Test room enough
+	jr	c,l4cdc		; .. nope
+	push	af
+l4d14:
+	pop	af
+	push	af		; Get back width
+	cp	MaxWid		; Test too long
+	jr	c,l4d1c
+	ld	a,MaxWid	; .. truncate
+l4d1c:
+	ld	hl,l63eb
+	call	l4a30
+	ld	hl,l63eb
+	ex	de,hl
+	or	a
+	sbc	hl,de		; Get length
+	ld	c,l
+	ld	hl,l6a6e
+	pop	af		; Get back terminal width
+	ld	b,a
+	jr	l4d35
+l4d31:
+	ld	(hl),' '	; Blank position
+	inc	hl
+	inc	c
+l4d35:
+	ld	a,c		; Test end
+	cp	b
+	jr	z,l4d4e		; .. yeap, got position
+	and	ColMask		; Test column position
+	jr	nz,l4d31	; .. nope, blank
+	ld	a,c
+l4d3e:
+	ld	(hl),tab	; Set tab for column position
+	inc	hl
+	add	a,ColTab	; Add for next column
+	cp	b		; Test too long now
+	jr	c,l4d3e		; .. nope, more tabs
+	jr	z,l4d4e		; .. got it
+	sub	ColTab		; .. fix
+	ld	c,a
+	dec	hl
+	jr	l4d31		; .. more blanks
+l4d4e:
+	ld	(hl),eot	;Set end
+	jr	l4cdc
+;
+;
+;
+l4d52:
+	pop	af
+	ld	c,a
+	ld	b,0
+	ld	a,0ffh
+	cpir
+	dec	hl
+	ld	(hl),a
+	ex	de,hl
+	xor	a
+	ld	(l6804),a
+	ret
+l4d62:
+	push	af
+	ld	a,(l6804)
+	or	a
+	jr	nz,l4d52
+	ld	(hl),0ffh
+	push	hl
+	call	.PartToken	; Get tiken
+	cp	36h		; Test end of line
+	pop	de
+	pop	bc
+	ret	z		; .. yeap
+	push	de
+	push	bc
+	call	l33a1
+	ld	h,b
+	ld	l,c
+	pop	bc
+	pop	de
+	ld	c,';'
+l4d7f:
+	inc	hl
+	ld	a,(hl)
+	cp	c
+	jr	z,l4d92
+	cp	cr
+	jr	z,l4d92
+	cp	' '
+	jr	nc,l4d8e
+	ld	a,' '
+l4d8e:
+	ld	(de),a
+	inc	de
+	djnz	l4d7f
+l4d92:
+	ld	a,0ffh
+	ld	(de),a
+	ret
+;
+; Pseudo code : .XCREF
+;
+l4d96:
+	ld	a,_RET
+	ld	($CrsEna),a	; Disable cross ref
+	ret
+l4d9c:
+	push	hl
+	ld	b,a
+	ld	a,(OS.Flg)	; Test warm vector saved
+	or	a
+	jr	nz,l4dd0	; .. yeap
+	call	l50fa
+	ld	hl,(OS+1)	; Get warm start
+	ld	(OS.sav),hl	; .. save
+	ld	hl,SLR.OS
+	ld	(OS+1),hl	; .. set new
+	ld	a,_RST.0
+	ld	(OS.Flg),a	; Indicate vector saved
+	ld	(l6392),a
+	ld	(Con$Put),a	; .. disable constant to file
+	ld	(l63aa),a
+	ld	(l63ad),a
+	ld	(l63b3),a
+	ld	(l63b6),a
+	ld	(l63b9),a
+	ld	(l63bc),a
+l4dd0:
+	pop	iy
+	ld	a,b
+	ld	($REL$),a	; Set mode
+	ret
+OS.sav:
+	dw	0
+;
+; New OS warm start
+;
+SLR.OS:
+	push	hl
+	push	de
+	push	bc
+	push	af
+	xor	a
+	ld	(OS.Flg),a	; Clear indicator
+	ld	hl,(OS.sav)	; Restore vector
+	ld	(OS+1),hl
+	ld	a,_JP
+	ld	(l6392),a	; Set jumps
+	ld	(Con$Put),a	; .. enable constant to file
+	ld	(l63aa),a
+	ld	(l63ad),a
+	ld	(l63b3),a
+	ld	(l63b6),a
+	ld	(l63b9),a
+	ld	(l63bc),a
+	push	iy
+	pop	hl
+	ld	a,($REL$)	; Get mode
+	push	af
+	ld	a,(l6811)
+	or	a
+	jr	z,l4e1e
+	ld	de,(l6686)
+	sbc	hl,de
+	ld	de,(l6683)
+	add	hl,de
+	pop	af
+	ld	a,(l6682)
+	push	af
+l4e1e:
+	pop	af
+	call	l63a4
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ex	(sp),hl
+	dec	hl
+	ex	(sp),hl
+	ret
+l4e2a:
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ex	de,hl
+	ld	a,(l680d)
+	or	a
+	jr	z,l4e3f
+	ld	a,6
+	ld	(l6387),a
+	push	de
+	call	l0cd4
+	pop	de
+l4e3f:
+	ld	hl,l6b46
+	ld	(LinePtr),hl	; Init line pointer
+	ex	de,hl
+	pop	af
+	push	af
+	call	l0d36
+	ld	a,0ffh
+	ld	(l6846),a
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+l4e55:
+	inc	de
+	ld	a,(de)
+	dec	de
+	or	' '
+	cp	61h
+	jr	nz,l4e66
+	ld	a,(de)
+	or	' '
+	cp	66h
+	jp	z,l4f0f
+l4e66:
+	call	l5066
+l4e69:
+	cp	9bh
+	jr	c,l4e82
+	cp	9eh
+	jp	z,l4f0f
+	cp	9fh
+	jr	z,l4e66
+	cp	0a1h
+	jr	z,l4e66
+	cp	9dh
+	jp	z,l4f36
+	jp	l4f2e
+l4e82:
+	call	l504a
+	jr	nz,l4eab
+	dec	hl
+	ex	af,af'
+	ld	a,(hl)
+	inc	hl
+	cp	'&'
+	jr	nz,l4ea6
+	inc	de
+l4e90:
+	ex	af,af'
+	ld	h,b
+	ld	l,c
+	ld	b,a
+	ld	a,0a0h
+	sub	b
+	dec	de
+	ld	(de),a
+	ld	a,(hl)
+	cp	'&'
+	jr	nz,l4e9f
+	inc	hl
+l4e9f:
+	ld	b,HIGH CtrlArr	; Set control page
+l4ea1:
+	call	l506a
+	jr	l4e69
+l4ea6:
+	ld	a,(bc)
+	cp	'&'
+	jr	z,l4e90
+l4eab:
+	ld	b,HIGH CtrlArr	; Set control page
+	call	l507c
+	jr	l4ea1
+l4eb2:
+	call	l5066
+l4eb5:
+	cp	9bh
+	jr	c,l4ecb
+	cp	9fh
+	jr	z,l4f0f
+	cp	9eh
+	jr	z,l4eb2
+	cp	0a1h
+	jr	z,l4eb2
+	cp	9dh
+	jr	z,l4f36
+	jr	l4f2e
+l4ecb:
+	call	l504a
+	jr	nz,l4ef4
+	dec	hl
+	ex	af,af'
+	ld	a,(hl)
+	inc	hl
+	cp	'&'
+	jr	nz,l4eef
+	inc	de
+l4ed9:
+	ex	af,af'
+	ld	h,b
+	ld	l,c
+	ld	b,a
+	ld	a,0a0h
+	sub	b
+	dec	de
+	ld	(de),a
+	ld	a,(hl)
+	cp	'&'
+	jr	nz,l4ee8
+	inc	hl
+l4ee8:
+	ld	b,HIGH CtrlArr	; Set control page
+l4eea:
+	call	l506a
+	jr	l4eb5
+l4eef:
+	ld	a,(bc)
+	cp	'&'
+	jr	z,l4ed9
+l4ef4:
+	ld	b,HIGH CtrlArr	; Set control page
+	call	l507c
+	jr	l4eea
+l4efb:
+	push	ix
+	ld	bc,RecLng
+	call	d.alloc_	; Allocate memory
+l4f01	equ	$-2
+	add	hl,bc
+	ex	de,hl
+	ld	hl,$SRCline$	; Init line
+l4f08:
+	ld	b,HIGH CtrlArr	; Set control page
+	call	l506a
+	jr	l4f12
+l4f0f:
+	call	l5066
+l4f12:
+	cp	9bh
+	jr	c,l4f52
+	cp	9dh
+	jr	z,l4f36
+	cp	9fh
+	jr	z,l4eb2
+	cp	9eh
+	jp	z,l4e55
+	cp	0a1h
+	jr	nz,l4f2e
+	inc	hl
+l4f28:
+	ld	a,(hl)
+	dec	de
+	ld	(de),a
+	inc	hl
+	jr	l4f08
+l4f2e:
+	ld	c,17
+	call	.ERROR
+	jp	l4f9b
+l4f36:
+	jp	l4fc7
+l4f39:
+	ld	a,(de)
+	cp	'&'
+	jr	nz,l4f45
+	inc	de
+	ld	a,(de)
+	cp	5eh
+	jr	nz,l4f45
+	dec	de
+l4f45:
+	ld	a,0a0h
+	sub	b
+	dec	de
+	ld	(de),a
+	ld	a,(hl)
+	cp	'&'
+	jr	nz,l4f08
+	inc	hl
+	jr	l4f08
+l4f52:
+	ld	ix,l669b	; Point to macro keys
+	call	l5005
+	jr	z,l4fa0		; .. ENDM
+	call	l5005
+	jr	z,l4f8e		; .. MACRO
+	call	l5005
+	jr	z,l4fa0		; .. MEND
+	call	l5005
+	jr	z,l4f8e		; .. REPT
+	call	l5005
+	jr	z,l4f8e		; .. IRP
+	call	l5005
+	jr	z,l4f8e		; .. IRPC
+	ld	b,' '
+l4f76:
+	push	bc
+	call	l5001
+	pop	bc
+	jr	z,l4f39
+	jr	c,l4f81
+	djnz	l4f76
+l4f81:
+	ld	a,(hl)
+	cp	'%'
+	jr	z,l4f28
+l4f86:
+	ld	b,HIGH CtrlArr	; Set control page
+	call	l507c
+	jp	l4f08
+l4f8e:
+	push	hl
+	ld	hl,(l683e)
+	inc	hl
+	ld	(l683e),hl
+	pop	hl
+l4f97:
+	ld	h,b
+	ld	l,c
+	jr	l4f86
+l4f9b:
+	ld	hl,0
+	jr	l4fa4
+l4fa0:
+	ld	hl,(l683e)
+	dec	hl
+l4fa4:
+	ld	(l683e),hl
+	ld	a,h
+	or	l
+	jr	nz,l4f97
+	ld	hl,l6364
+	ld	(TokPtr),hl	; Init token pointer
+	call	l4ff5
+	cp	lf
+	jr	z,l4fc0
+	dec	de
+	ld	a,cr
+	ld	(de),a
+	dec	de
+	ld	a,lf
+	ld	(de),a
+l4fc0:
+	dec	de
+	ld	a,eof
+	ld	(de),a
+	scf
+	jr	l4fe3
+l4fc7:
+	ld	a,c
+	cp	lf
+	jr	z,l4fe0
+	inc	hl
+	ld	a,(hl)
+	dec	hl
+	cp	';'
+	jr	nz,l4fea
+	call	l4ff5
+	cp	lf
+	jr	z,l4fe3
+	ld	a,cr
+	dec	de
+	ld	(de),a
+	ld	a,lf
+l4fe0:
+	dec	de
+	ld	(de),a
+	or	a
+l4fe3:
+	ld	(SymPtr),de	; Save pointer
+l4fe5	equ	$-2
+	pop	ix
+	ret
+

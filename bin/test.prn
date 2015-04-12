@@ -1,0 +1,44 @@
+
+BASCOM 5.30a- Copyright 1979,80,81 (C) by MICROSOFT - 31954 Bytes Free
+ 0014 0007	10 for x=1 to 5
+	** 0014'I00000:	CALL	$530 
+	** 0017'L00010:	
+	** 0017'	CALL	$LFMA
+	** 001A'	DW	<const>
+	** 001C'	JMP	I00001
+	** 001F'I00002:	
+ 001F 0007	20 print x,x*x
+	** 001F'L00020:	CALL	$PR0A
+	** 0022'	LXI	H,X!
+	** 0025'	CALL	$PV0A
+	** 0028'	CALL	$FMUA
+	** 002B'	DW	X!
+	** 002D'	DW	X!
+	** 002F'	LXI	H,$AC%
+	** 0032'	CALL	$PV2A
+ 0035 000B	30 next x
+	** 0035'L00030:	CALL	$FADA
+	** 0038'	DW	X!
+	** 003A'	DW	<const>
+	** 003C'I00001:	
+	** 003C'	CALL	$FASO
+	** 003F'	DW	X!
+	** 0041'	CALL	$LEJA
+	** 0044'	DW	X!
+	** 0046'	DW	<const>
+	** 0048'	DW	I00002
+ 004A 000B	40 system
+	** 004A'L00040:	CALL	$END 
+ 004D 000B	
+ 004D 000B	
+	** 004D'	CALL	$END 
+ 005A 0015	
+
+00000 Fatal Error(s)
+31717 Bytes Free
+
+!
+	** 0025'	CALL	$PV0A
+	** 0028'	CALL	$FMUA
+	** 002B'	DW	X!
+	** 002D'	DW

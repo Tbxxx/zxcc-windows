@@ -1,0 +1,199 @@
+   1:				; BIOS / BDOS for the ZXCC environment.
+   2:				;
+   3:				; Modified by Tom Burnett for dual (testing/tflag) use
+   4:     -	FE00          		org	0FE00h
+   5:     -	FE00  5A584343		DEFB	'ZXCC04'	;Serial number
+	      3034
+   6:				;
+   7:				; Some CP/M programs expect a jump at the start of BDOS, so here it is.
+   8:				;
+   9:    0+10	FE06  C309FE  	BDOS0:	JP	BDOS1
+  10:				
+  11:   10+7	FE09  3EC0    	BDOS1:	LD	A,0C0h
+  12:     -	FE0B  EDFE    		DEFB	0EDh,0FEh
+  13:   17+10	FE0D  C9      		RET
+  14:				;
+  15:				;This is not a real BIOS, so let its code live below the BIOS jumpblock.
+  16:				;
+  17:   27+20	FE0E  DD2224FE	UBIOS:	LD	(XIX),IX
+  18:   47+14	FE12  DDE1    		POP	IX		;IX = address of UBIOS function
+  19:				;
+  20:				; ZXCC was written on the assumption that the BIOS jumpblock was a series 
+  21:				; of CALL UBIOS instructions; in which case, IX would be the return address,
+  22:				; or the address of the jumpblock entry plus 3.
+  23:				;
+  24:				; Now that the BIOS jumpblock is a true jumpblock and the CALL instructions 
+  25:				; are elsewhere, the offset is relative to BIOS2 rather than CONST0. So 
+  26:				; adjust the offset.
+  27:				;
+  28:   61+11	FE14  D5      		PUSH	DE
+  29:   72+10	FE15  11D300  		LD	DE,CONST0 - BIOS2
+  30:   82+15	FE18  DD19    		ADD	IX,DE
+  31:   97+10	FE1A  D1      		POP	DE
+  32:  107+7	FE1B  3EC3    		LD	A,0C3h		;C3h = BIOS call
+  33:     -	FE1D  EDFE    		DEFB	0EDh,0FEh	;ZXCC trap; IX = BIOS function
+  34:  114+20	FE1F  DD2A24FE		LD	IX,(XIX)
+  35:  134+10	FE23  C9      		RET
+  36:				;
+  37:     -	FE24  0000    	XIX:	DEFW	0
+  38:				;
+  39:				; Location to start 0x100 transient program run.
+  40:				; It's done here just in case the tpa program does a RET instead of a
+  41:				; jp 0000h that would be a warm start BIOS call.  For example, BDS C
+  42:				; does this
+  43:     -	FE26          	BEGIN:
+  44:  144+17	FE26  CD0001  			CALL	0100h	; run tpa program
+  45:  161+10	FE29  C32DFE  			JP		CBOOT	; leave program via c code
+  46:  171+4	FE2C  76      			HALT			; stop the show if this doesn't work for some reason	
+  47:						
+  48:				
+  49:				; CBOOT now leaves program via an exit(1) in the C code
+  50:				; *.com file loading is handled from main()
+  51:  175+17	FE2D  CD0EFE  	CBOOT:	CALL	UBIOS	; Program termination via C code
+  52:  192+17	FE30  CD0EFE  	WBOOT:  CALL	UBIOS   ; Program termination via C code
+  53:				;
+  54:				; Implementation of all other BIOS functions
+  55:				;
+  56:  209+17	FE33  CD0EFE  	BIOS2:	CALL	UBIOS	
+  57:  226+17	FE36  CD0EFE  	BIOS3:	CALL	UBIOS	
+  58:  243+17	FE39  CD0EFE  	BIOS4:	CALL	UBIOS	
+  59:  260+17	FE3C  CD0EFE  	BIOS5:	CALL	UBIOS	
+  60:  277+17	FE3F  CD0EFE  	BIOS6:	CALL	UBIOS	
+  61:  294+17	FE42  CD0EFE  	BIOS7:	CALL	UBIOS	
+  62:  311+17	FE45  CD0EFE  	BIOS8:	CALL	UBIOS	
+  63:  328+17	FE48  CD0EFE  	BIOS9:	CALL	UBIOS	
+  64:  345+17	FE4B  CD0EFE  	BIOS10:	CALL	UBIOS	
+  65:  362+17	FE4E  CD0EFE  	BIOS11:	CALL	UBIOS	
+  66:  379+17	FE51  CD0EFE  	BIOS12:	CALL	UBIOS	
+  67:  396+17	FE54  CD0EFE  	BIOS13:	CALL	UBIOS	
+  68:  413+17	FE57  CD0EFE  	BIOS14:	CALL	UBIOS	
+  69:  430+17	FE5A  CD0EFE  	BIOS15:	CALL	UBIOS	
+  70:  447+17	FE5D  CD0EFE  	BIOS16:	CALL	UBIOS	
+  71:  464+17	FE60  CD0EFE  	BIOS17:	CALL	UBIOS	
+  72:  481+17	FE63  CD0EFE  	BIOS18:	CALL	UBIOS	
+  73:  498+17	FE66  CD0EFE  	BIOS19:	CALL	UBIOS	
+  74:  515+17	FE69  CD0EFE  	BIOS20:	CALL	UBIOS	
+  75:  532+17	FE6C  CD0EFE  	BIOS21:	CALL	UBIOS	
+  76:  549+17	FE6F  CD0EFE  	BIOS22:	CALL	UBIOS	
+  77:  566+17	FE72  CD0EFE  	BIOS23:	CALL	UBIOS	
+  78:  583+17	FE75  CD0EFE  	BIOS24:	CALL	UBIOS	
+  79:  600+17	FE78  CD0EFE  	BIOS25:	CALL	UBIOS	
+  80:  617+17	FE7B  CD0EFE  	BIOS26:	CALL	UBIOS	
+  81:  634+17	FE7E  CD0EFE  	BIOS27:	CALL	UBIOS	
+  82:  651+17	FE81  CD0EFE  	BIOS28:	CALL	UBIOS	
+  83:  668+17	FE84  CD0EFE  	BIOS29:	CALL	UBIOS	
+  84:  685+17	FE87  CD0EFE  	BIOS30:	CALL	UBIOS	
+  85:  702+17	FE8A  CD0EFE  	BIOS31:	CALL	UBIOS	
+  86:  719+17	FE8D  CD0EFE  	BIOS32:	CALL	UBIOS	
+  87:				;
+  88:				;
+  89:     -	FEEC          		org	0FEECh
+  90:     -	FEEC  FF      	tmpdrv:	defb	0FFh		;Temp drive = current
+  91:				
+  92:				
+  93:				;
+  94:				;TODO: SCB at FE9Ch
+  95:				;
+  96:				
+  97:				;
+  98:				; Mallard BASIC (and maybe other programs) assumes that the BIOS 
+  99:				; jumpblock is a list of jumps, not calls. So rather than composing the
+ 100:				; BIOS jumpblock of a sequence of CALL UBIOS, it's now a sequence
+ 101:				; of jumps to CALL UBIOS.
+ 102:				;
+ 103:     -	FF00          		org	0FF00h
+ 104:  736+10	FF00  C32DFE  		JP	CBOOT	;FF00
+ 105:  746+10	FF03  C330FE  	WBOOT0:	JP	WBOOT	;03
+ 106:  756+10	FF06  C333FE  	CONST0:	JP	BIOS2
+ 107:  766+10	FF09  C336FE  		JP	BIOS3
+ 108:  776+10	FF0C  C339FE  		JP	BIOS4
+ 109:  786+10	FF0F  C33CFE  		JP	BIOS5
+ 110:  796+10	FF12  C33FFE  		JP	BIOS6
+ 111:  806+10	FF15  C342FE  		JP	BIOS7
+ 112:  816+10	FF18  C345FE  		JP	BIOS8
+ 113:  826+10	FF1B  C348FE  		JP	BIOS9
+ 114:  836+10	FF1E  C34BFE  		JP	BIOS10
+ 115:  846+10	FF21  C34EFE  		JP	BIOS11
+ 116:  856+10	FF24  C351FE  		JP	BIOS12
+ 117:  866+10	FF27  C354FE  		JP	BIOS13
+ 118:  876+10	FF2A  C357FE  		JP	BIOS14
+ 119:  886+10	FF2D  C35AFE  		JP	BIOS15
+ 120:  896+10	FF30  C35DFE  		JP	BIOS16
+ 121:  906+10	FF33  C360FE  		JP	BIOS17
+ 122:  916+10	FF36  C363FE  		JP	BIOS18
+ 123:  926+10	FF39  C366FE  		JP	BIOS19
+ 124:  936+10	FF3C  C369FE  		JP	BIOS20
+ 125:  946+10	FF3F  C36CFE  		JP	BIOS21
+ 126:  956+10	FF42  C36FFE  		JP	BIOS22
+ 127:  966+10	FF45  C372FE  		JP	BIOS23
+ 128:  976+10	FF48  C375FE  		JP	BIOS24
+ 129:  986+10	FF4B  C378FE  		JP	BIOS25
+ 130:  996+10	FF4E  C37BFE  		JP	BIOS26
+ 131: 1006+10	FF51  C37EFE  		JP	BIOS27
+ 132: 1016+10	FF54  C381FE  		JP	BIOS28
+ 133: 1026+10	FF57  C384FE  		JP	BIOS29
+ 134: 1036+10	FF5A  C387FE  		JP	BIOS30
+ 135: 1046+10	FF5D  C38AFE  		JP	BIOS31
+ 136: 1056+10	FF60  C38DFE  		JP	BIOS32
+ 137:				;
+ 138:     -	FFC0          		org	0FFC0h	;Space for DPB
+ 139:     -	FFC0          	dpb:	defs	20h
+ 140:				
+ 141:     -	FFE0          		END
+
+
+
+Statistics:
+
+     4	passes
+     0	jr promotions
+    42	symbols
+   244	bytes
+
+
+
+Symbol Table:
+
+bdos0           fe06     
+bdos1           fe09     
+begin           fe26     
+bios10          fe4b     
+bios11          fe4e     
+bios12          fe51     
+bios13          fe54     
+bios14          fe57     
+bios15          fe5a     
+bios16          fe5d     
+bios17          fe60     
+bios18          fe63     
+bios19          fe66     
+bios2           fe33     
+bios20          fe69     
+bios21          fe6c     
+bios22          fe6f     
+bios23          fe72     
+bios24          fe75     
+bios25          fe78     
+bios26          fe7b     
+bios27          fe7e     
+bios28          fe81     
+bios29          fe84     
+bios3           fe36     
+bios30          fe87     
+bios31          fe8a     
+bios32          fe8d     
+bios4           fe39     
+bios5           fe3c     
+bios6           fe3f     
+bios7           fe42     
+bios8           fe45     
+bios9           fe48     
+cboot           fe2d     
+const0          ff06     
+dpb             ffc0     
+tmpdrv          feec     
+ubios           fe0e     
+wboot           fe30     
+wboot0          ff03     
+xix             fe24     
+

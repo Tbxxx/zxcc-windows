@@ -1,0 +1,23 @@
+W	<const>
+	** 003C'I00001:	
+	** 003C'	CALL	$FASO
+	** 003F'	DW	X!
+	** 0041'	CALL	$LEJA
+	** 0044'	DW	X!
+	** 0046'	DW	<const>
+	** 0048'	DW	I00002
+ 004A 000B	40 system
+	** 004A'L00040:	CALL	$END 
+ 004D 000B	
+ 004D 000B	
+	** 004D'	CALL	$END 
+ 005A 0015	
+
+00000 Fatal Error(s)
+31717 Bytes Free
+
+!
+	** 0025'	CALL	$PV0A
+	** 0028'	CALL	$FMUA
+	** 002B'	DW	X!
+	** 002D'	DW

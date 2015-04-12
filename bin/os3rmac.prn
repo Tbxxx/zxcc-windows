@@ -1,0 +1,2263 @@
+CP/M RMAC ASSEM 1.1	#001	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                	title	'Bdos Interface, Bdos, Version 2.2 Feb, 1980'
+                ;*****************************************************************
+                ;*****************************************************************
+                ;**                                                             **
+                ;**   B a s i c    D i s k   O p e r a t i n g   S y s t e m    **
+                ;**            I n t e r f a c e   M o d u l e                   **
+                ;**                                                             **
+                ;*****************************************************************
+                ;*****************************************************************
+                ;
+                ;	Copyright (c) 1978, 1979, 1980
+                ;	Digital Research
+                ;	Box 579, Pacific Grove
+                ;	California
+                ;
+                ;
+                ;      20 january 1980
+                ;
+                ;
+ FFFF =         on	equ	0ffffh
+ 0000 =         off	equ	00000h
+ FFFF =         test	equ	on
+                ;
+                	if	test
+ BC00           	org	0bc00h
+                	else
+                	org	0800h
+                	endif
+                ;	bios value defined at end of module
+                ;
+ 0018 =         ssize	equ	24		;24 level stack
+                ;
+                ;	low memory locations
+ 0000 =         reboot	equ	0000h		;reboot system
+ 0003 =         ioloc	equ	0003h		;i/o byte location
+ 0006 =         bdosa	equ	0006h		;address field of jmp BDOS
+                ;
+                ;	bios access constants
+ CA00 #         bootf	set	bios+3*0	;cold boot function
+ CA03 #         wbootf	set	bios+3*1	;warm boot function
+ CA06 #         constf	set	bios+3*2	;console status function
+ CA09 #         coninf	set	bios+3*3	;console input function
+ CA0C #         conoutf	set	bios+3*4	;console output function
+ CA0F #         listf	set	bios+3*5	;list output function
+ CA12 #         punchf	set	bios+3*6	;punch output function
+ CA15 #         readerf	set	bios+3*7	;reader input function
+ CA18 #         homef	set	bios+3*8	;disk home function
+ CA1B #         seldskf	set	bios+3*9	;select disk function
+ CA1E #         settrkf	set	bios+3*10	;set track function
+ CA21 #         setsecf	set	bios+3*11	;set sector function
+ CA24 #         setdmaf	set	bios+3*12	;set dma function
+ CA27 #         readf	set	bios+3*13	;read disk function
+ CA2A #         writef	set	bios+3*14	;write disk function
+ CA2D #         liststf	set	bios+3*15	;list status function
+ CA30 #         sectran	set	bios+3*16	;sector translate
+                ;
+CP/M RMAC ASSEM 1.1	#002	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;	equates for non graphic characters
+ 0003 =         ctlc	equ	03h	;control c
+ 0005 =         ctle	equ	05h	;physical eol
+ 0008 =         ctlh	equ	08h	;backspace
+ 0010 =         ctlp	equ	10h	;prnt toggle
+ 0012 =         ctlr	equ	12h	;repeat line
+ 0013 =         ctls	equ	13h	;stop/start screen
+ 0015 =         ctlu	equ	15h	;line delete
+ 0018 =         ctlx	equ	18h	;=ctl-u
+ 001A =         ctlz	equ	1ah	;end of file
+ 007F =         rubout	equ	7fh	;char delete
+ 0009 =         tab	equ	09h	;tab char
+ 000D =         cr	equ	0dh	;carriage return
+ 000A =         lf	equ	0ah	;line feed
+ 005E =         ctl	equ	5eh	;up arrow
+                ;
+ BC00 0000000000	db	0,0,0,0,0,0
+                ;
+                ;	enter here from the user's program with function number in c,
+                ;	and information address in d,e
+ BC06 C311BC    	jmp	bdose	;past parameter block
+                ;
+                ;	************************************************
+                ;	*** relative locations 0009 - 000e           ***
+                ;	************************************************
+ BC09 99BC      pererr:	dw	persub	;permanent error subroutine
+ BC0B A5BC      selerr:	dw	selsub	;select error subroutine
+ BC0D ABBC      roderr:	dw	rodsub	;ro disk error subroutine
+ BC0F B1BC      roferr:	dw	rofsub	;ro file error subroutine
+                ;
+                ;
+                bdose:	;arrive here from user programs
+ BC11 EB2243BFEB	xchg! shld info! xchg ;info=DE, DE=info
+ BC16 7B32D6C9  	mov a,e! sta linfo ;linfo = low(info) - don't equ
+ BC1A 2100002245	lxi h,0! shld aret ;return value defaults to 0000
+                	;save user's stack pointer, set to local stack
+ BC20 39220FBF  	dad sp! shld entsp ;entsp = stackptr
+ BC24 3141BF    	lxi sp,lstack ;local stack setup
+ BC27 AF32E0C932	xra a! sta fcbdsk! sta resel ;fcbdsk,resel=false
+ BC2E 2174C9    	lxi h,goback ;return here after all functions
+ BC31 E5        	push h ;jmp goback equivalent to ret
+ BC32 79FE29D0  	mov a,c! cpi nfuncs! rnc ;skip if invalid #
+ BC36 4B        	mov c,e ;possible output character to C
+ BC37 2147BC5F16	lxi h,functab! mov e,a! mvi d,0 ;DE=func, HL=.ciotab
+ BC3D 19195E2356	dad d! dad d! mov e,m! inx h! mov d,m ;DE=functab(func)
+ BC42 2A43BF    		lhld info	;info in DE for later xchg	
+ BC45 EBE9      	xchg! pchl ;dispatched
+                ;
+                ;	dispatch table for functions
+                functab:
+ BC47 03CAC8BE90	dw	wbootf, func1, func2, func3
+ BC4F 12CA0FCAD4	dw	punchf, listf, func6, func7
+ BC57 F3BEF8BEE1	dw	func8, func9, func10,func11
+ 000C =         diskf	equ	($-functab)/2	;disk funcs
+ BC5F 7EC883C845	dw	func12,func13,func14,func15
+ BC67 A5C8ABC8C8	dw	func16,func17,func18,func19
+CP/M RMAC ASSEM 1.1	#003	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ BC6F E0C8E6C8EC	dw	func20,func21,func22,func23
+ BC77 FEC804C90A	dw	func24,func25,func26,func27
+ BC7F 2CC117C91D	dw	func28,func29,func30,func31
+ BC87 2DC941C947	dw	func32,func33,func34,func35
+ BC8F 0EC853C904	dw	func36,func37,func38,func39		;
+ BC97 9BC9      	dw	func40					;
+ 0029 =         nfuncs	equ	($-functab)/2
+                ;
+                ;
+                ;	error subroutines
+                persub:	;report permanent error
+ BC99 21CABCCDE5	lxi h,permsg! call errflg ;to report the error
+ BC9F FE03CA0000	cpi ctlc! jz reboot ;reboot if response is ctlc
+ BCA4 C9        	ret ;and ignore the error
+                ;
+                selsub:	;report select error
+ BCA5 21D5BCC3B4	lxi h,selmsg! jmp wait$err ;wait console before boot
+                ;
+                rodsub:	;report write to read/only disk
+ BCAB 21E1BCC3B4	lxi h,rodmsg! jmp wait$err ;wait console
+                ;
+                rofsub:	;report read/only file
+ BCB1 21DCBC    	lxi h,rofmsg ;drop through to wait for console
+                ;
+                wait$err:
+                	;wait for response before boot
+ BCB4 CDE5BCC300	call errflg! jmp reboot
+                ;
+                ;	error messages
+ BCBA 42646F7320dskmsg:	db	'Bdos Err On '
+ BCC6 203A2024  dskerr:	db	' : $'	;filled in by errflg
+ BCCA 4261642053permsg:	db	'Bad Sector$'
+ BCD5 53656C6563selmsg:	db	'Select$'
+ BCDC 46696C6520rofmsg:	db	'File '
+ BCE1 522F4F24  rodmsg:	db	'R/O$'
+                ;
+                ;
+                errflg:
+                	;report error to console, message address in HL
+ BCE5 E5CDC9BD  	push h! call crlf ;stack mssg address, new line
+ BCE9 3A42BFC641	lda curdsk! adi 'A'! sta dskerr ;current disk name
+ BCF1 01BABCCDD3	lxi b,dskmsg! call print ;the error message
+ BCF7 C1CDD3BD  	pop b! call print ;error mssage tail
+                	;jmp conin ;to get the input character			
+                	;(drop through to conin)
+                	;ret
+                ;
+                ;
+                ;	console handlers
+                conin:
+                	;read console character to A
+ BCFB 210EBF7E36	lxi h,kbchar! mov a,m! mvi m,0! ora a! rnz
+                	;no previous keyboard character ready
+ BD03 C309CA    	jmp coninf ;get character externally
+                	;ret
+                ;
+CP/M RMAC ASSEM 1.1	#004	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                conech:
+                	;read character with echo
+ BD06 CDFBBCCD14	call conin! call echoc! rc ;echo character?
+                        ;character must be echoed before return
+ BD0D F54FCD90BD	push psw! mov c,a! call tabout! pop psw
+ BD13 C9        	ret ;with character in A
+                ;
+                echoc:
+                	;echo character if graphic
+                	;cr, lf, tab, or backspace
+ BD14 FE0DC8    	cpi cr! rz ;carriage return?
+ BD17 FE0AC8    	cpi lf! rz ;line feed?
+ BD1A FE09C8    	cpi tab! rz ;tab?
+ BD1D FE08C8    	cpi ctlh! rz ;backspace?
+ BD20 FE20C9    	cpi ' '! ret ;carry set if not graphic
+                ;
+                conbrk:	;check for character ready
+ BD23 3A0EBFB7C2	lda kbchar! ora a! jnz conb1 ;skip if active kbchar
+                		;no active kbchar, check external break
+ BD2A CD06CAE601		call constf! ani 1! rz ;return if no char ready
+                		;character ready, read it
+ BD30 CD09CA    		call coninf ;to A
+ BD33 FE13C242BD		cpi ctls! jnz conb0 ;check stop screen function
+                		;found ctls, read next character
+ BD38 CD09CA    		call coninf ;to A
+ BD3B FE03CA0000		cpi ctlc! jz reboot ;ctlc implies re-boot
+                		;not a reboot, act as if nothing has happened
+ BD40 AFC9      		xra a! ret ;with zero in accumulator
+                	conb0:
+                		;character in accum, save it
+ BD42 320EBF    		sta kbchar
+                	conb1:
+                		;return with true set in accumulator
+ BD45 3E01C9    		mvi a,1! ret
+                ;
+                conout:
+                	;compute character position/write console char from C
+                	;compcol = true if computing column position
+ BD48 3A0ABFB7C2	lda compcol! ora a! jnz compout
+                		;write the character, then compute the column
+                		;write console character from C
+ BD4F C5CD23BD  		push b! call conbrk ;check for screen stop function
+ BD53 C1C5      		pop b! push b ;recall/save character
+ BD55 CD0CCA    		call conoutf ;externally, to console
+ BD58 C1C5      		pop b! push b ;recall/save character
+                		;may be copying to the list device
+ BD5A 3A0DBFB7C4		lda listcp! ora a! cnz listf ;to printer, if so
+ BD61 C1        		pop b ;recall the character
+                	compout:
+ BD62 79        		mov a,c ;recall the character
+                		;and compute column position
+ BD63 210CBF    		lxi h,column ;A = char, HL = .column
+ BD66 FE7FC8    		cpi rubout! rz ;no column change if nulls
+ BD69 34        		inr m ;column = column + 1
+ BD6A FE20D0    		cpi ' '! rnc ;return if graphic
+                		;not graphic, reset column position
+CP/M RMAC ASSEM 1.1	#005	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ BD6D 35        		dcr m ;column = column - 1
+ BD6E 7EB7C8    		mov a,m! ora a! rz ;return if at zero
+                		;not at zero, may be backspace or end line
+ BD71 79        		mov a,c ;character back to A
+ BD72 FE08C279BD		cpi ctlh! jnz notbacksp
+                			;backspace character
+ BD77 35        			dcr m ;column = column - 1
+ BD78 C9        			ret
+                		notbacksp:
+                			;not a backspace character, eol?
+ BD79 FE0AC0    			cpi lf! rnz ;return if not
+                			;end of line, column = 0
+ BD7C 3600      			mvi m,0 ;column = 0
+ BD7E C9        		ret
+                ;
+                ctlout:
+                	;send C character with possible preceding up-arrow
+ BD7F 79CD14BD  	mov a,c! call echoc ;cy if not graphic (or special case)
+ BD83 D290BD    	jnc tabout ;skip if graphic, tab, cr, lf, or ctlh
+                		;send preceding up arrow
+ BD86 F50E5ECD48		push psw! mvi c,ctl! call conout ;up arrow
+ BD8C F1F640    		pop psw! ori 40h ;becomes graphic letter
+ BD8F 4F        		mov c,a ;ready to print
+                		;(drop through to tabout)
+                ;
+                tabout:
+                	;expand tabs to console
+ BD90 79FE09C248	mov a,c! cpi tab! jnz conout ;direct to conout if not
+                		;tab encountered, move to next tab position
+                	tab0:
+ BD96 0E20CD48BD		mvi c,' '! call conout ;another blank
+ BD9B 3A0CBFE607		lda column! ani 111b ;column mod 8 = 0 ?
+ BDA0 C296BD    		jnz tab0 ;back for another if not
+ BDA3 C9        	ret
+                ;
+                ;
+                backup:
+                	;back-up one screen position
+ BDA4 CDACBD0E20	call pctlh! mvi c,' '! call conoutf
+                ;	(drop through to pctlh)				;
+                pctlh:
+                	;send ctlh to console without affecting column count
+ BDAC 0E08C30CCA	mvi c,ctlh! jmp conoutf
+                	;ret
+                ;
+                crlfp:
+                	;print #, cr, lf for ctlx, ctlu, ctlr functions
+                	;then move to strtcol (starting column)
+ BDB1 0E23CD48BD	mvi c,'#'! call conout
+ BDB6 CDC9BD    	call crlf
+                	;column = 0, move to position strtcol
+                	crlfp0:
+ BDB9 3A0CBF210B		lda column! lxi h,strtcol
+ BDBF BED0      		cmp m! rnc ;stop when column reaches strtcol
+ BDC1 0E20CD48BD		mvi c,' '! call conout ;print blank
+ BDC6 C3B9BD    		jmp crlfp0
+CP/M RMAC ASSEM 1.1	#006	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;;
+                ;
+                crlf:
+                	;carriage return line feed sequence
+ BDC9 0E0DCD48BD	mvi c,cr! call conout! mvi c,lf! jmp conout
+                	;ret
+                ;
+                print:
+                	;print message until M(BC) = '$'
+ BDD3 0AFE24C8  	ldax b! cpi '$'! rz ;stop on $
+                		;more to print
+ BDD7 03C54F    		inx b! push b! mov c,a ;char to C
+ BDDA CD90BD    		call tabout ;another character printed
+ BDDD C1C3D3BD  		pop b! jmp print
+                ;
+                read:	;read to info address (max length, current length, buffer)
+ BDE1 3A0CBF320B	lda column! sta strtcol ;save start for ctl-x, ctl-h
+ BDE7 2A43BF    	lhld info
+ BDEA 4E23E50600	mov c,m! inx h! push h! mvi b,0
+                	;B = current buffer length,
+                	;C = maximum buffer length,
+                	;HL= next to fill - 1
+                	readnx:
+                		;read next character, BC, HL active
+ BDEF C5E5      		push b! push h ;blen, cmax, HL saved
+                		readn0:
+ BDF1 CDFBBC    			call conin ;next char in A
+ BDF4 E67F      			ani 7fh ;mask parity bit
+ BDF6 E1C1      			pop h! pop b ;reactivate counters
+ BDF8 FE0DCAC1BE			cpi cr! jz readen ;end of line?
+ BDFD FE0ACAC1BE			cpi lf! jz readen ;also end of line
+ BE02 FE08C216BE			cpi ctlh! jnz noth ;backspace?
+                			;do we have any characters to back over?
+ BE07 78B7CAEFBD			mov a,b! ora a! jz readnx
+                			;characters remain in buffer, backup one
+ BE0C 05        			dcr b ;remove one character
+ BE0D 3A0CBF320A			lda column! sta compcol ;col > 0
+                			;compcol > 0 marks repeat as length compute
+ BE13 C370BE    			jmp linelen ;uses same code as repeat
+                		noth:
+                			;not a backspace
+ BE16 FE7FC226BE			cpi rubout! jnz notrub ;rubout char?
+                			;rubout encountered, rubout if possible
+ BE1B 78B7CAEFBD			mov a,b! ora a! jz readnx ;skip if len=0
+                			;buffer has characters, resend last char
+ BE20 7E052B    			mov a,m! dcr b! dcx h ;A = last char
+                			;blen=blen-1, next to fill - 1 decremented
+ BE23 C3A9BE    			jmp rdech1 ;act like this is an echo
+                ;
+                		notrub:
+                			;not a rubout character, check end line
+ BE26 FE05C237BE			cpi ctle! jnz note ;physical end line?
+                			;yes, save active counters and force eol
+ BE2B C5E5CDC9BD			push b! push h! call crlf
+ BE30 AF320BBF  			xra a! sta strtcol ;start position = 00
+ BE34 C3F1BD    			jmp readn0 ;for another character
+CP/M RMAC ASSEM 1.1	#007	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                		note:
+                			;not end of line, list toggle?
+ BE37 FE10C248BE			cpi ctlp! jnz notp ;skip if not ctlp
+                			;list toggle - change parity
+ BE3C E5        			push h ;save next to fill - 1
+ BE3D 210DBF    			lxi h,listcp ;HL=.listcp flag
+ BE40 3E0196    			mvi a,1! sub m ;True-listcp
+ BE43 77        			mov m,a ;listcp = not listcp
+ BE44 E1C3EFBD  			pop h! jmp readnx ;for another char
+                		notp:
+                			;not a ctlp, line delete?
+ BE48 FE18C25FBE			cpi ctlx! jnz notx
+ BE4D E1        			pop h ;discard start position
+                			;loop while column > strtcol
+                			backx:
+ BE4E 3A0BBF210C				lda strtcol! lxi h,column
+ BE54 BED2E1BD  				cmp m! jnc read ;start again
+ BE58 35        				dcr m ;column = column - 1
+ BE59 CDA4BD    				call backup ;one position
+ BE5C C34EBE    				jmp backx
+                		notx:
+                			;not a control x, control u?
+                			;not control-X, control-U?
+ BE5F FE15C26BBE			cpi ctlu! jnz notu ;skip if not
+                			;delete line (ctlu)
+ BE64 CDB1BD    			call crlfp ;physical eol
+ BE67 E1        			pop h ;discard starting position
+ BE68 C3E1BD    			jmp read ;to start all over
+                		notu:
+                			;not line delete, repeat line?
+ BE6B FE12C2A6BE			cpi ctlr! jnz notr
+                		linelen:
+                			;repeat line, or compute line len (ctlh)
+                			;if compcol > 0
+ BE70 C5CDB1BD  			push b! call crlfp ;save line length
+ BE74 C1E1E5C5  			pop b! pop h! push h! push b
+                			;bcur, cmax active, beginning buff at HL
+                		rep0:
+ BE78 78B7CA8ABE			mov a,b! ora a! jz rep1 ;count len to 00
+ BE7D 234E      			inx h! mov c,m ;next to print
+ BE7F 05C5E5    			dcr b! push b! push h ;count length down
+ BE82 CD7FBD    			call ctlout ;character echoed
+ BE85 E1C1      			pop h! pop b ;recall remaining count
+ BE87 C378BE    			jmp rep0 ;for the next character
+                		rep1:
+                			;end of repeat, recall lengths
+                			;original BC still remains pushed
+ BE8A E5        			push h ;save next to fill
+ BE8B 3A0ABFB7  			lda compcol! ora a ;>0 if computing length
+ BE8F CAF1BD    			jz readn0 ;for another char if so
+                			;column position computed for ctlh
+ BE92 210CBF96  			lxi h,column! sub m ;diff > 0
+ BE96 320ABF    			sta compcol ;count down below
+                			;move back compcol-column spaces
+                		backsp:
+                			;move back one more space
+CP/M RMAC ASSEM 1.1	#008	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ BE99 CDA4BD    			call backup ;one space
+ BE9C 210ABF35  			lxi h,compcol! dcr m
+ BEA0 C299BE    			jnz backsp
+ BEA3 C3F1BD    			jmp readn0 ;for next character
+                		notr:
+                			;not a ctlr, place into buffer
+                		rdecho:
+ BEA6 2377      			inx h! mov m,a ;character filled to mem
+ BEA8 04        			inr b ;blen = blen + 1
+                		rdech1:
+                			;look for a random control character
+ BEA9 C5E5      			push b! push h ;active values saved
+ BEAB 4F        			mov c,a ;ready to print
+ BEAC CD7FBD    			call ctlout ;may be up-arrow C
+ BEAF E1C17E    			pop h! pop b! mov a,m ;recall char
+ BEB2 FE03      			cpi ctlc ;set flags for reboot test
+ BEB4 78        			mov a,b ;move length to A
+ BEB5 C2BDBE    			jnz notc ;skip if not a control c
+ BEB8 FE01      			cpi 1 ;control C, must be length 1
+ BEBA CA0000    			jz reboot ;reboot if blen = 1
+                			;length not one, so skip reboot
+                		notc:
+                			;not reboot, are we at end of buffer?
+ BEBD B9DAEFBD  			cmp c! jc readnx ;go for another if not
+                		readen:
+                			;end of read operation, store blen
+ BEC1 E170      			pop h! mov m,b ;M(current len) = B
+ BEC3 0E0DC348BD			mvi c,cr! jmp conout ;return carriage
+                			;ret
+                func1:
+                	;return console character with echo
+ BEC8 CD06BD    	call conech
+ BECB C301BF    	jmp sta$ret
+                ;
+ BD90 =         func2:	equ	tabout
+                	;write console character with tab expansion
+                ;
+                func3:
+                	;return reader character
+ BECE CD15CA    	call readerf
+ BED1 C301BF    	jmp sta$ret
+                ;
+                ;func4:	equated to punchf
+                	;write punch character
+                ;
+                ;func5:	equated to listf
+                	;write list character
+                	;write to list device
+                ;
+                func6:
+                	;direct console i/o - read if 0ffh
+ BED4 793CCAE0BE	mov a,c! inr a! jz dirinp ;0ffh => 00h, means input mode
+ BED9 3CCA06CA  		inr a! jz constf	;0feH in C for status
+                		;direct output function
+ BEDD C30CCA    		jmp conoutf			;
+                	dirinp:
+CP/M RMAC ASSEM 1.1	#009	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ BEE0 CD06CA    		call constf ;status check
+ BEE3 B7CA91C9  		ora a! jz retmon ;skip, return 00 if not ready
+                		;character is ready, get it
+ BEE7 CD09CA    		call coninf ;to A
+ BEEA C301BF    		jmp sta$ret
+                ;
+                func7:
+                	;return io byte
+ BEED 3A0300    	lda ioloc
+ BEF0 C301BF    	jmp sta$ret
+                ;
+                func8:
+                	;set i/o byte
+ BEF3 210300    	lxi h,ioloc
+ BEF6 71        	mov m,c
+ BEF7 C9        	ret ;jmp goback
+                ;
+                func9:
+                	;write line until $ encountered
+ BEF8 EB        	xchg	;was lhld info	
+ BEF9 4D44      	mov c,l! mov b,h ;BC=string address
+ BEFB C3D3BD    	jmp print ;out to console	
+                ;
+ BDE1 =         func10:	equ	read
+                	;read a buffered console line
+                ;
+                func11:
+                	;check console status
+ BEFE CD23BD    	call conbrk
+                	;(drop through to sta$ret)
+                sta$ret:
+                	;store the A register to aret
+ BF01 3245BF    	sta aret
+                func$ret:						;
+ BF04 C9        	ret ;jmp goback (pop stack for non cp/m functions)
+                ;
+                setlret1:
+                	;set lret = 1
+ BF05 3E01C301BF	mvi a,1! jmp sta$ret				;
+                ;
+                ;
+                ;
+                ;	data areas
+                ;
+ BF0A 00        compcol:db	0	;true if computing column position
+ BF0B 00        strtcol:db	0	;starting column position after read
+ BF0C 00        column:	db	0	;column position
+ BF0D 00        listcp:	db	0	;listing toggle
+ BF0E 00        kbchar:	db	0	;initial key char = 00
+ BF0F           entsp:	ds	2	;entry stack pointer
+ BF11           	ds	ssize*2	;stack size
+                lstack:
+                ;	end of Basic I/O System
+                ;
+                ;*****************************************************************
+                ;*****************************************************************
+CP/M RMAC ASSEM 1.1	#010	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;
+                ;	common values shared between bdosi and bdos
+ BF41 00        usrcode:db	0	;current user number
+ BF42 00        curdsk:	db	0	;current disk number
+ BF43           info:	ds	2	;information address
+ BF45           aret:	ds	2	;address value to return
+ BF45 =         lret	equ	aret	;low(aret)
+                ;
+                ;*****************************************************************
+                ;*****************************************************************
+                ;**                                                             **
+                ;**   B a s i c    D i s k   O p e r a t i n g   S y s t e m    **
+                ;**                                                             **
+                ;*****************************************************************
+                ;*****************************************************************
+                ;
+ 0022 =         dvers	equ	22h	;version 2.2
+                ;	module addresses
+                ;
+                ;	literal constants
+ 00FF =         true	equ	0ffh	;constant true
+ 0000 =         false	equ	000h	;constant false
+ FFFF =         enddir	equ	0ffffh	;end of directory
+ 0001 =         byte	equ	1	;number of bytes for "byte" type
+ 0002 =         word	equ	2	;number of bytes for "word" type
+                ;
+                ;	fixed addresses in low memory
+ 005C =         tfcb	equ	005ch	;default fcb location
+ 0080 =         tbuff	equ	0080h	;default buffer location
+                ;
+                ;	fixed addresses referenced in bios module are
+                ;	pererr (0009), selerr (000c), roderr (000f)
+                ;
+                ;	error message handlers
+                ;
+                ;per$error:	 
+                	;report permanent error to user	
+                ;	lxi h,pererr  jmp goerr		
+                ;
+                ;rod$error:						;
+                	;report read/only disk error
+                ;	lxi h,roderr  jmp goerr				;
+                ;
+                ;rof$error:						;
+                	;report read/only file error			;
+                ;	lxi h,roferr	;jmp goerr	
+                ;
+                sel$error:
+                	;report select error
+ BF47 210BBC    	lxi h,selerr					;
+                ;
+                ;
+                goerr:
+                	;HL = .errorhandler, call subroutine
+ BF4A 5E2356    	mov e,m! inx h! mov d,m ;address of routine in DE
+ BF4D EBE9      	xchg! pchl ;to subroutine
+CP/M RMAC ASSEM 1.1	#011	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;
+                ;
+                ;
+                ;	local subroutines for bios interface
+                ;
+                move:
+                	;move data length of length C from source DE to
+                	;destination given by HL
+ BF4F 0C        	inr c ;in case it is zero
+                	move0:
+ BF50 0DC8      		dcr c! rz ;more to move
+ BF52 1A77      		ldax d! mov m,a ;one byte moved
+ BF54 1323      		inx d! inx h ;to next byte
+ BF56 C350BF    		jmp move0
+                ;
+                selectdisk:
+                	;select the disk drive given by curdsk, and fill
+                	;the base addresses curtrka - alloca, then fill
+                	;the values of the disk parameter block
+ BF59 3A42BF4F  	lda curdsk! mov c,a ;current disk# to c
+                	;lsb of e = 0 if not yet logged - in
+ BF5D CD1BCA    	call seldskf ;HL filled by call
+                	;HL = 0000 if error, otherwise disk headers
+ BF60 7CB5C8    	mov a,h! ora l! rz ;return with 0000 in HL and z flag
+                		;disk header block address in hl
+ BF63 5E235623  		mov e,m! inx h! mov d,m! inx h ;DE=.tran
+ BF67 22B3C92323		shld cdrmaxa! inx h! inx h ;.cdrmax
+ BF6C 22B5C92323		shld curtrka! inx h! inx h ;HL=.currec
+ BF71 22B7C92323		shld curreca! inx h! inx h ;HL=.buffa
+                		;DE still contains .tran
+ BF76 EB22D0C9  		xchg! shld tranv ;.tran vector
+ BF7A 21B9C9    		lxi h,buffa ;DE= source for move, HL=dest
+ BF7D 0E08CD4FBF		mvi c,addlist! call move ;addlist filled
+                		;now fill the disk parameter block
+ BF82 2ABBC9EB  		lhld dpbaddr! xchg ;DE is source
+ BF86 21C1C9    		lxi h,sectpt ;HL is destination
+ BF89 0E0FCD4FBF		mvi c,dpblist! call move ;data filled
+                		;now set single/double map mode
+ BF8E 2AC6C9    		lhld maxall ;largest allocation number
+ BF91 7C        		mov a,h ;00 indicates < 255
+ BF92 21DDC936FF		lxi h,single! mvi m,true ;assume a=00
+ BF97 B7CA9DBF  		ora a! jz retselect
+                		;high order of maxall not zero, use double dm
+ BF9B 3600      		mvi m,false
+                	retselect:
+ BF9D 3EFFB7C9  	mvi a,true! ora a! ret ;select disk function ok
+                ;
+                home:
+                	;move to home position, then offset to start of dir
+ BFA1 CD18CA    	call homef ;move to track 00, sector 00 reference
+                	;lxi h,offset ;mov c,m ;inx h ;mov b,m ;call settrkf	;
+                	;first directory position selected
+ BFA4 AF        	xra a ;constant zero to accumulator
+ BFA5 2AB5C97723	lhld curtrka! mov m,a! inx h! mov m,a ;curtrk=0000
+ BFAB 2AB7C97723	lhld curreca! mov m,a! inx h! mov m,a ;currec=0000
+                	;curtrk, currec both set to 0000
+CP/M RMAC ASSEM 1.1	#012	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ BFB1 C9        	ret
+                ;
+                rdbuff:
+                	;read buffer and check condition
+ BFB2 CD27CA    	call readf ;current drive, track, sector, dma
+ BFB5 C3BBBF    	jmp diocomp	;check for i/o errors
+                ;
+                wrbuff:
+                	;write buffer and check condition
+                	;write type (wrtype) is in register C
+                	;wrtype = 0 => normal write operation
+                	;wrtype = 1 => directory write operation
+                	;wrtype = 2 => start of new block
+ BFB8 CD2ACA    	call writef ;current drive, track, sector, dma
+                diocomp:	;check for disk errors
+ BFBB B7C8      	ora a! rz			;
+ BFBD 2109BC    	lxi	h,pererr			;
+ BFC0 C34ABF    	jmp goerr
+                ;
+                seekdir:
+                	;seek the record containing the current dir entry
+ BFC3 2AEAC9    	lhld dcnt ;directory counter to HL
+ BFC6 0E02CDEAC0	mvi c,dskshf! call hlrotr ;value to HL
+ BFCB 22E5C922EC	shld arecord! shld drec ;ready for seek
+                	;  jmp seek				;
+                	;ret
+                ;
+                ;
+                seek:
+                	;seek the track given by arecord (actual record)
+                	;local equates for registers
+ 0001 =         	arech  equ b! arecl  equ c ;arecord = BC
+ 0003 =         	crech  equ d! crecl  equ e ;currec  = DE
+ 0005 =         	ctrkh  equ h! ctrkl  equ l ;curtrk  = HL
+ 0005 =         	tcrech equ h! tcrecl equ l ;tcurrec = HL
+                	;load the registers from memory
+ BFD1 21E5C94E23	lxi h,arecord! mov arecl,m! inx h! mov arech,m
+ BFD7 2AB7C95E23	lhld curreca ! mov crecl,m! inx h! mov crech,m
+ BFDD 2AB5C97E23	lhld curtrka ! mov a,m! inx h! mov ctrkh,m! mov ctrkl,a
+                	;loop while arecord < currec
+                	seek0:
+ BFE4 7993789A  		mov a,arecl! sub crecl! mov a,arech! sbb crech
+ BFE8 D2FABF    		jnc seek1 ;skip if arecord >= currec
+                			;currec = currec - sectpt
+ BFEB E52AC1C9  			push ctrkh! lhld sectpt
+ BFEF 7B955F    			mov a,crecl! sub l! mov crecl,a
+ BFF2 7A9C57    			mov a,crech! sbb h! mov crech,a
+ BFF5 E1        			pop ctrkh
+                			;curtrk = curtrk - 1
+ BFF6 2B        			dcx ctrkh
+ BFF7 C3E4BF    		jmp seek0 ;for another try
+                	seek1:
+                	;look while arecord >= (t:=currec + sectpt)
+ BFFA E5        		push ctrkh
+ BFFB 2AC1C919  		lhld sectpt! dad crech ;HL = currec+sectpt
+ BFFF DA0FC0    		  jc seek2		;can be > FFFFH	
+CP/M RMAC ASSEM 1.1	#013	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C002 7995789C  		mov a,arecl! sub tcrecl! mov a,arech! sbb tcrech
+ C006 DA0FC0    		jc seek2 ;skip if t > arecord
+                			;currec = t
+ C009 EB        			xchg
+                			;curtrk = curtrk + 1
+ C00A E123      			pop ctrkh! inx ctrkh
+ C00C C3FABF    		jmp seek1 ;for another try
+ C00F E1        	seek2:	pop ctrkh
+                	;arrive here with updated values in each register
+ C010 C5D5E5    	push arech! push crech! push ctrkh ;to stack for later
+                	;stack contains (lowest) BC=arecord, DE=currec, HL=curtrk
+ C013 EB2ACEC919	xchg! lhld offset! dad d ;HL = curtrk+offset
+ C018 444DCD1ECA	mov b,h! mov c,l! call settrkf ;track set up
+                	;note that BC - curtrk is difference to move in bios
+ C01D D1        	pop d ;recall curtrk
+ C01E 2AB5C97323	lhld curtrka! mov m,e! inx h! mov m,d ;curtrk updated
+                	;now compute sector as arecord-currec
+ C024 D1        	pop crech ;recall currec
+ C025 2AB7C97323	lhld curreca! mov m,crecl! inx h! mov m,crech
+ C02B C1        	pop arech ;BC=arecord, DE=currec
+ C02C 79934F    	mov a,arecl! sub crecl! mov arecl,a
+ C02F 789A47    	mov a,arech! sbb crech! mov arech,a
+ C032 2AD0C9EB  	lhld tranv! xchg ;BC=sector#, DE=.tran
+ C036 CD30CA    	call sectran ;HL = tran(sector)
+ C039 4D44      	mov c,l! mov b,h ;BC = tran(sector)
+ C03B C321CA    	jmp setsecf ;sector selected
+                	;ret
+                ;
+                ;	file control block (fcb) constants
+ 00E5 =         empty	equ	0e5h	;empty directory entry
+ 007F =         lstrec	equ	127	;last record# in extent
+ 0080 =         recsiz	equ	128	;record size
+ 0020 =         fcblen	equ	32	;file control block size
+ 0004 =         dirrec	equ	recsiz/fcblen	;directory elts / record
+ 0002 =         dskshf	equ	2	;log2(dirrec)
+ 0003 =         dskmsk	equ	dirrec-1
+ 0005 =         fcbshf	equ	5	;log2(fcblen)
+                ;
+ 000C =         extnum	equ	12	;extent number field
+ 001F =         maxext	equ	31	;largest extent number
+ 000D =         ubytes	equ	13	;unfilled bytes field
+ 000E =         modnum	equ	14	;data module number
+ 000F =         maxmod	equ	15	;largest module number
+ 0080 =         fwfmsk	equ	80h	;file write flag is high order modnum
+ 000F =         namlen	equ	15	;name length
+ 000F =         reccnt	equ	15	;record count field
+ 0010 =         dskmap	equ	16	;disk map field
+ 001F =         lstfcb	equ	fcblen-1
+ 0020 =         nxtrec	equ	fcblen
+ 0021 =         ranrec	equ	nxtrec+1;random record field (2 bytes)
+                ;
+                ;	reserved file indicators
+ 0009 =         rofile	equ	9	;high order of first type char
+ 000A =         invis	equ	10	;invisible file in dir command
+                ;	equ	11	;reserved
+                ;
+CP/M RMAC ASSEM 1.1	#014	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;	utility functions for file access
+                ;
+                dm$position:
+                	;compute disk map position for vrecord to HL
+ C03E 21C3C94E  	lxi h,blkshf! mov c,m ;shift count to C
+ C042 3AE3C9    	lda vrecord ;current virtual record to A
+                	dmpos0:
+ C045 B71F0DC245		ora a! rar! dcr c! jnz dmpos0
+                	;A = shr(vrecord,blkshf) = vrecord/2**(sect/block)
+ C04B 47        	mov b,a ;save it for later addition
+ C04C 3E0896    	mvi a,8! sub m ;8-blkshf to accumulator
+ C04F 4F        	mov c,a ;extent shift count in register c
+ C050 3AE2C9    	lda extval ;extent value ani extmsk
+                	dmpos1:
+                		;blkshf = 3,4,5,6,7, C=5,4,3,2,1
+                		;shift is 4,3,2,1,0
+ C053 0DCA5CC0  		dcr c! jz dmpos2
+ C057 B717C353C0		ora a! ral! jmp dmpos1
+                	dmpos2:
+                	;arrive here with A = shl(ext and extmsk,7-blkshf)
+ C05C 80        	add b ;add the previous shr(vrecord,blkshf) value
+                	;A is one of the following values, depending upon alloc
+                	;bks blkshf
+                	;1k   3     v/8 + extval * 16
+                	;2k   4     v/16+ extval * 8
+                	;4k   5     v/32+ extval * 4
+                	;8k   6     v/64+ extval * 2
+                	;16k  7     v/128+extval * 1
+ C05D C9        	ret ;with dm$position in A
+                ;
+                getdm:
+                	;return disk map value from position given by BC
+ C05E 2A43BF    	lhld info ;base address of file control block
+ C061 11100019  	lxi d,dskmap! dad d ;HL =.diskmap
+ C065 09        	dad b ;index by a single byte value
+ C066 3ADDC9    	lda single ;single byte/map entry?
+ C069 B7CA71C0  	ora a! jz getdmd ;get disk map single byte
+ C06D 6E2600C9  		mov l,m! mvi h,0! ret ;with HL=00bb
+                	getdmd:
+ C071 09        		dad b ;HL=.fcb(dm+i*2)
+                		;double precision value returned
+ C072 5E2356EBC9		mov e,m! inx h! mov d,m! xchg! ret
+                ;
+                index:
+                	;compute disk block number from current fcb
+ C077 CD3EC0    	call dm$position ;0...15 in register A
+ C07A 4F0600CD5E	mov c,a! mvi b,0! call getdm ;value to HL
+ C080 22E5C9C9  	shld arecord! ret
+                ;
+                allocated:
+                	;called following index to see if block allocated
+ C084 2AE5C97DB4	lhld arecord! mov a,l! ora h! ret
+                ;
+                atran:
+                	;compute actual record address, assuming index called
+ C08A 3AC3C9    	lda blkshf ;shift count to reg A
+CP/M RMAC ASSEM 1.1	#015	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C08D 2AE5C9    	lhld arecord
+                	atran0:
+ C090 293DC290C0		dad h! dcr a! jnz atran0 ;shl(arecord,blkshf)
+ C095 22E7C9    		shld arecord1		;save shifted block #  
+ C098 3AC4C94F  	lda blkmsk! mov c,a ;mask value to C
+ C09C 3AE3C9A1  	lda vrecord! ana c ;masked value in A
+ C0A0 B56F      	ora l! mov l,a ;to HL
+ C0A2 22E5C9    	shld arecord ;arecord=HL or (vrecord and blkmsk)
+ C0A5 C9        	ret
+                ;
+                getexta:
+                	;get current extent field address to A
+ C0A6 2A43BF110C	lhld info! lxi d,extnum! dad d ;HL=.fcb(extnum)
+ C0AD C9        	ret
+                ;
+                getfcba:
+                	;compute reccnt and nxtrec addresses for get/setfcb
+ C0AE 2A43BF110F	lhld info! lxi d,reccnt! dad d! xchg ;DE=.fcb(reccnt)
+ C0B6 21110019  	lxi h,(nxtrec-reccnt)! dad d ;HL=.fcb(nxtrec)
+ C0BA C9        	ret
+                ;
+                getfcb:
+                	;set variables from currently addressed fcb
+ C0BB CDAEC0    	call getfcba ;addresses in DE, HL
+ C0BE 7E32E3C9  	mov a,m! sta vrecord ;vrecord=fcb(nxtrec)
+ C0C2 EB7E32E1C9	xchg! mov a,m! sta rcount ;rcount=fcb(reccnt)
+ C0C7 CDA6C0    	call getexta ;HL=.fcb(extnum)
+ C0CA 3AC5C9    	lda extmsk ;extent mask to a
+ C0CD A6        	ana m ;fcb(extnum) and extmsk
+ C0CE 32E2C9    	sta extval
+ C0D1 C9        	ret
+                ;
+                setfcb:
+                	;place values back into current fcb
+ C0D2 CDAEC0    	call getfcba ;addresses to DE, HL
+ C0D5 3AD5C9    	lda seqio
+ C0D8 FE02C2DEC0	cpi 02! jnz setfcb1! xra a	;check ranfill	
+                setfcb1:
+ C0DE 4F         	mov c,a ;=1 if sequential i/o
+ C0DF 3AE3C98177	lda vrecord! add c! mov m,a ;fcb(nxtrec)=vrecord+seqio
+ C0E4 EB3AE1C977	xchg! lda rcount! mov m,a ;fcb(reccnt)=rcount
+ C0E9 C9        	ret
+                ;
+                hlrotr:
+                	;hl rotate right by amount C
+ C0EA 0C        	inr c ;in case zero
+ C0EB 0DC8      	hlrotr0: dcr c! rz ;return when zero
+ C0ED 7CB71F67  		mov a,h! ora a! rar! mov h,a ;high byte
+ C0F1 7D1F6F    		mov a,l! rar! mov l,a ;low byte
+ C0F4 C3EBC0    		jmp hlrotr0
+                ;
+                ;
+                compute$cs:
+                	;compute checksum for current directory buffer
+ C0F7 0E80      	mvi c,recsiz ;size of directory buffer
+ C0F9 2AB9C9    	lhld buffa ;current directory buffer
+CP/M RMAC ASSEM 1.1	#016	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C0FC AF        	xra a ;clear checksum value
+                	computecs0:
+ C0FD 86230D    		add m! inx h! dcr c ;cs=cs+buff(recsiz-C)
+ C100 C2FDC0    		jnz computecs0
+ C103 C9        	ret ;with checksum in A
+                ;
+                hlrotl:
+                	;rotate the mask in HL by amount in C
+ C104 0C        	inr c ;may be zero
+ C105 0DC8      	hlrotl0: dcr c! rz ;return if zero
+ C107 29C305C1  		dad h! jmp hlrotl0
+                ;
+                set$cdisk:
+                	;set a "1" value in curdsk position of BC
+ C10B C5        	push b ;save input parameter
+ C10C 3A42BF4F  	lda curdsk! mov c,a ;ready parameter for shift
+ C110 210100    	lxi h,1 ;number to shift
+ C113 CD04C1    	call hlrotl ;HL = mask to integrate
+ C116 C1        	pop b ;original mask
+ C117 79B56F    	mov a,c! ora l! mov l,a
+ C11A 78B467    	mov a,b! ora h! mov h,a ;HL = mask or rol(1,curdsk)
+ C11D C9        	ret
+                ;
+                nowrite:
+                	;return true if dir checksum difference occurred
+ C11E 2AADC93A42	lhld rodsk! lda curdsk! mov c,a! call hlrotr
+ C128 7DE601C9  	mov a,l! ani 1b! ret ;non zero if nowrite
+                ;
+                set$ro:
+                	;set current disk to read only
+ C12C 21ADC94E23	lxi h,rodsk! mov c,m! inx h! mov b,m
+ C132 CD0BC1    	call set$cdisk ;sets bit to 1
+ C135 22ADC9    	shld rodsk
+                	;high water mark in directory goes to max
+ C138 2AC8C923EB	lhld dirmax! inx h! xchg ;DE = directory max	
+ C13D 2AB3C9    	lhld cdrmaxa ;HL = .cdrmax
+ C140 732372    	mov m,e! inx h! mov m,d ;cdrmax = dirmax
+ C143 C9        	ret
+                ;
+                check$rodir:
+                	;check current directory element for read/only status
+ C144 CD5EC1    	call getdptra ;address of element
+                ;						
+                check$rofile:
+                	;check current buff(dptr) or fcb(0) for r/o status
+ C147 11090019  	lxi d,rofile! dad d ;offset to ro bit
+ C14B 7E17D0    	mov a,m! ral! rnc ;return if not set
+ C14E 210FBCC34A	lxi h,roferr! jmp goerr			;
+                ;	jmp rof$error ;exit to read only disk message
+                ;
+                ;
+                check$write:
+                	;check for write protected disk
+ C154 CD1EC1C8  	call nowrite! rz ;ok to write if not rodsk
+ C158 210DBCC34A	lxi h,roderr! jmp goerr
+                ;	jmp rod$error ;read only disk error
+CP/M RMAC ASSEM 1.1	#017	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;
+                getdptra:
+                	;compute the address of a directory element at
+                	;positon dptr in the buffer
+ C15E 2AB9C93AE9	lhld buffa! lda dptr			;
+                addh:
+                	;HL = HL + A
+ C164 856FD0    	add l! mov l,a! rnc
+                	;overflow to H
+ C167 24C9      	inr h! ret
+                ;
+                ;
+                getmodnum:
+                	;compute the address of the module number 
+                	;bring module number to accumulator
+                	;(high order bit is fwf (file write flag)
+ C169 2A43BF110E	lhld info! lxi d,modnum! dad d ;HL=.fcb(modnum)
+ C170 7EC9      	mov a,m! ret ;A=fcb(modnum)
+                ;
+                clrmodnum:
+                	;clear the module number field for user open/make
+ C172 CD69C13600	call getmodnum! mvi m,0 ;fcb(modnum)=0
+ C177 C9        	ret
+                ;
+                setfwf:
+ C178 CD69C1    	call getmodnum ;HL=.fcb(modnum), A=fcb(modnum)
+                	;set fwf (file write flag) to "1"
+ C17B F68077    	ori fwfmsk! mov m,a ;fcb(modnum)=fcb(modnum) or 80h
+                	;also returns non zero in accumulator
+ C17E C9        	ret
+                ;
+                ;
+                compcdr:
+                	;return cy if cdrmax > dcnt
+ C17F 2AEAC9EB  	lhld dcnt! xchg ;DE = directory counter
+ C183 2AB3C9    	lhld cdrmaxa ;HL=.cdrmax
+ C186 7B96      	mov a,e! sub m ;low(dcnt) - low(cdrmax)
+ C188 23        	inx h ;HL = .cdrmax+1
+ C189 7A9E      	mov a,d! sbb m ;hig(dcnt) - hig(cdrmax)
+                	;condition dcnt - cdrmax  produces cy if cdrmax>dcnt
+ C18B C9        	ret
+                ;
+                setcdr:
+                	;if not (cdrmax > dcnt) then cdrmax = dcnt+1
+ C18C CD7FC1    	call compcdr
+ C18F D8        	rc ;return if cdrmax > dcnt
+                	;otherwise, HL = .cdrmax+1, DE = dcnt
+ C190 13722B73  	inx d! mov m,d! dcx h! mov m,e
+ C194 C9        	ret
+                ;
+                subdh:
+                	;compute HL = DE - HL
+ C195 7B956F7A9C	mov a,e! sub l! mov l,a! mov a,d! sbb h! mov h,a
+ C19B C9        	ret
+                ;
+                newchecksum:
+CP/M RMAC ASSEM 1.1	#018	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C19C 0EFF      	mvi c,true ;drop through to compute new checksum
+                checksum:
+                	;compute current checksum record and update the
+                	;directory element if C=true, or check for = if not
+                	;drec < chksiz?
+ C19E 2AECC9EB2A	lhld drec! xchg! lhld chksiz! call subdh ;DE-HL
+ C1A8 D0        	rnc ;skip checksum if past checksum vector size
+                		;drec < chksiz, so continue
+ C1A9 C5        		push b ;save init flag
+ C1AA CDF7C0    		call compute$cs ;check sum value to A
+ C1AD 2ABDC9    		lhld checka ;address of check sum vector
+ C1B0 EB        		xchg
+ C1B1 2AECC9    		lhld drec ;value of drec
+ C1B4 19        		dad d ;HL = .check(drec)
+ C1B5 C1        		pop b ;recall true=0ffh or false=00 to C
+ C1B6 0C        		inr c ;0ffh produces zero flag
+ C1B7 CAC4C1    		jz initial$cs
+                			;not initializing, compare
+ C1BA BE        			cmp m ;compute$cs=check(drec)?
+ C1BB C8        			rz ;no message if ok
+                			;checksum error, are we beyond
+                			;the end of the disk?
+ C1BC CD7FC1    			call compcdr
+ C1BF D0        			rnc ;no message if so
+ C1C0 CD2CC1    			call set$ro ;read/only disk set
+ C1C3 C9        			ret
+                		initial$cs:
+                			;initializing the checksum
+ C1C4 77C9      			mov m,a! ret
+                ;
+                ;
+                wrdir:
+                	;write the current directory entry, set checksum
+ C1C6 CD9CC1    	call newchecksum ;initialize entry
+ C1C9 CDE0C1    	call setdir ;directory dma
+ C1CC 0E01      	mvi c,1 ;indicates a write directory operation
+ C1CE CDB8BF    	call wrbuff ;write the buffer
+ C1D1 C3DAC1            jmp setdata ;to data dma address
+                	;ret
+                ;
+                rd$dir:
+                	;read a directory entry into the directory buffer
+ C1D4 CDE0C1    	call setdir ;directory dma
+ C1D7 CDB2BF    	call rdbuff ;directory record loaded
+                        ; jmp setdata to data dma address    
+                	;ret
+                ;
+                setdata:
+                	;set data dma address
+ C1DA 21B1C9C3E3	lxi h,dmaad! jmp setdma ;to complete the call
+                ;
+                setdir:
+                	;set directory dma address
+ C1E0 21B9C9    	lxi h,buffa  ;jmp setdma to complete call     
+                ;
+                setdma:
+CP/M RMAC ASSEM 1.1	#019	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                	;HL=.dma address to set (i.e., buffa or dmaad)
+ C1E3 4E2346    	mov c,m! inx h! mov b,m ;parameter ready
+ C1E6 C324CA    	jmp setdmaf
+                ;
+                ;
+                dir$to$user:
+                	;copy the directory entry to the user buffer
+                	;after call to search or searchn by user code
+ C1E9 2AB9C9EB  	lhld buffa! xchg ;source is directory buffer
+ C1ED 2AB1C9    	lhld dmaad ;destination is user dma address
+ C1F0 0E80      	mvi c,recsiz ;copy entire record
+ C1F2 C34FBF    	jmp move
+                	;ret
+                ;
+                end$of$dir:
+                	;return zero flag if at end of directory, non zero
+                	;if not at end (end of dir if dcnt = 0ffffh)
+ C1F5 21EAC97E  	lxi h,dcnt! mov a,m ;may be 0ffh
+ C1F9 23BE      	inx h! cmp m ;low(dcnt) = high(dcnt)?
+ C1FB C0        	rnz ;non zero returned if different
+                	;high and low the same, = 0ffh?
+ C1FC 3C        	inr a ;0ffh becomes 00 if so
+ C1FD C9        	ret
+                ;
+                set$end$dir:
+                	;set dcnt to the end of the directory
+ C1FE 21FFFF22EA	lxi h,enddir! shld dcnt! ret
+                ;
+                read$dir:
+                	;read next directory entry, with C=true if initializing
+ C205 2AC8C9EB  	lhld dirmax! xchg ;in preparation for subtract
+ C209 2AEAC92322	lhld dcnt! inx h! shld dcnt ;dcnt=dcnt+1
+                	;continue while dirmax >= dcnt (dirmax-dcnt no cy)
+ C210 CD95C1    	call subdh ;DE-HL
+ C213 D219C2    	jnc read$dir0
+                		;yes, set dcnt to end of directory
+ C216 C3FEC1    		jmp set$end$dir			;
+                ;		ret				;
+                	read$dir0:
+                		;not at end of directory, seek next element
+                		;initialization flag is in C
+ C219 3AEAC9E603		lda dcnt! ani dskmsk ;low(dcnt) and dskmsk
+ C21E 0605      		mvi b,fcbshf ;to multiply by fcb size
+                		read$dir1:
+ C220 8705C220C2			add a! dcr b! jnz read$dir1
+                		;A = (low(dcnt) and dskmsk) shl fcbshf
+ C225 32E9C9    		sta dptr ;ready for next dir operation
+ C228 B7C0      		ora a! rnz ;return if not a new record
+ C22A C5        		push b ;save initialization flag C
+ C22B CDC3BF    		call seek$dir ;seek proper record
+ C22E CDD4C1    		call rd$dir ;read the directory record
+ C231 C1        		pop b ;recall initialization flag
+ C232 C39EC1    		jmp checksum ;checksum the directory elt
+                		;ret
+                ;
+                ;
+CP/M RMAC ASSEM 1.1	#020	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                getallocbit:
+                	;given allocation vector position BC, return with byte
+                	;containing BC shifted so that the least significant
+                	;bit is in the low order accumulator position.  HL is
+                	;the address of the byte for possible replacement in
+                	;memory upon return, and D contains the number of shifts
+                	;required to place the returned value back into position
+ C235 79E6073C5F	mov a,c! ani 111b! inr a! mov e,a! mov d,a
+                	;d and e both contain the number of bit positions to shift
+ C23B 790F0F0FE6	mov a,c! rrc! rrc! rrc! ani 11111b! mov c,a ;C shr 3 to C
+ C242 7887878787	mov a,b! add a! add a! add a! add a! add a ;B shl 5
+ C248 B14F      	ora c! mov c,a ;bbbccccc to C
+ C24A 780F0F0FE6	mov a,b! rrc! rrc! rrc! ani 11111b! mov b,a ;BC shr 3 to BC
+ C251 2ABFC9    	lhld alloca ;base address of allocation vector
+ C254 097E      	dad b! mov a,m ;byte to A, hl = .alloc(BC shr 3)
+                	;now move the bit to the low order position of A
+ C256 071DC256C2	rotl: rlc! dcr e! jnz rotl! ret
+                ;
+                ;
+                setallocbit:
+                	;BC is the bit position of ALLOC to set or reset.  The
+                	;value of the bit is in register E.
+ C25C D5CD35C2  	push d! call getallocbit ;shifted val A, count in D
+ C260 E6FE      	ani 1111$1110b ;mask low bit to zero (may be set)
+ C262 C1B1      	pop b! ora c ;low bit of C is masked into A
+                ;	jmp rotr ;to rotate back into proper position	
+                	;ret
+                rotr:
+                	;byte value from ALLOC is in register A, with shift count
+                	;in register C (to place bit back into position), and
+                	;target ALLOC position in registers HL, rotate and replace
+ C264 0F15C264C2	rrc! dcr d! jnz rotr ;back into position
+ C269 77        	mov m,a ;back to ALLOC
+ C26A C9        	ret
+                ;
+                scandm:
+                	;scan the disk map addressed by dptr for non-zero
+                	;entries, the allocation vector entry corresponding
+                	;to a non-zero entry is set to the value of C (0,1)
+ C26B CD5EC1    	call getdptra ;HL = buffa + dptr
+                	;HL addresses the beginning of the directory entry
+ C26E 11100019  	lxi d,dskmap! dad d ;hl now addresses the disk map
+ C272 C5        	push b ;save the 0/1 bit to set
+ C273 0E11      	mvi c,fcblen-dskmap+1 ;size of single byte disk map + 1
+                	scandm0:
+                		;loop once for each disk map entry
+ C275 D1        		pop d ;recall bit parity
+ C276 0DC8      		dcr c! rz ;all done scanning?
+                		;no, get next entry for scan
+ C278 D5        		push d ;replace bit parity
+ C279 3ADDC9B7CA		lda single! ora a! jz scandm1
+                			;single byte scan operation
+ C280 C5        			push b ;save counter
+ C281 E5        			push h ;save map address
+ C282 4E0600    			mov c,m! mvi b,0 ;BC=block#
+ C285 C38EC2    			jmp scandm2
+CP/M RMAC ASSEM 1.1	#021	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                		scandm1:
+                			;double byte scan operation
+ C288 0D        			dcr c ;count for double byte
+ C289 C5        			push b ;save counter
+ C28A 4E2346    			mov c,m! inx h! mov b,m ;BC=block#
+ C28D E5        			push h ;save map address
+                		scandm2:
+                			;arrive here with BC=block#, E=0/1
+ C28E 79B0      			mov a,c! ora b ;skip if = 0000
+ C290 CA9DC2    			jz scanm3
+ C293 2AC6C9    				lhld maxall	;check invalid index
+ C296 7D917C98  			mov a,l! sub c! mov a,h! sbb b	;maxall - block#
+ C29A D45CC2    			cnc set$alloc$bit			;
+                			;bit set to 0/1
+                		scanm3:						;
+ C29D E123      			pop h! inx h ;to next bit position
+ C29F C1        			pop b ;recall counter
+ C2A0 C375C2    			jmp scandm0 ;for another item
+                ;
+                initialize:
+                	;initialize the current disk
+                	;lret = false ;set to true if $ file exists
+                	;compute the length of the allocation vector - 2
+ C2A3 2AC6C90E03	lhld maxall! mvi c,3 ;perform maxall/8
+                	;number of bytes in alloc vector is (maxall/8)+1
+ C2A8 CDEAC023  	call hlrotr! inx h ;HL = maxall/8+1
+ C2AC 444D      	mov b,h! mov c,l ;count down BC til zero
+ C2AE 2ABFC9    	lhld alloca ;base of allocation vector
+                	;fill the allocation vector with zeros
+                	initial0:
+ C2B1 360023    		mvi m,0! inx h ;alloc(i)=0
+ C2B4 0B        		dcx b ;count length down
+ C2B5 78B1C2B1C2		mov a,b! ora c! jnz initial0
+                	;set the reserved space for the directory
+ C2BA 2ACAC9EB  	lhld dirblk! xchg
+ C2BE 2ABFC9    	lhld alloca ;HL=.alloc()
+ C2C1 732372    	mov m,e! inx h! mov m,d ;sets reserved directory blks
+                	;allocation vector initialized, home disk
+ C2C4 CDA1BF    	call home
+                        ;cdrmax = 3 (scans at least one directory record)
+ C2C7 2AB3C93603	lhld cdrmaxa! mvi m,3! inx h! mvi m,0
+                	;cdrmax = 0000
+ C2CF CDFEC1    	call set$end$dir ;dcnt = enddir
+                	;read directory entries and check for allocated storage
+                	initial2:
+ C2D2 0EFFCD05C2		mvi c,true! call read$dir
+ C2D7 CDF5C1C8  		call end$of$dir! rz ;return if end of directory
+                		;not end of directory, valid entry?
+ C2DB CD5EC1    		call getdptra ;HL = buffa + dptr
+ C2DE 3EE5BE    		mvi a,empty! cmp m
+ C2E1 CAD2C2    		jz initial2 ;go get another item
+                		;not empty, user code the same?
+ C2E4 3A41BF    		lda usrcode
+ C2E7 BEC2F6C2  		cmp m! jnz pdollar
+                		;same user code, check for '$' submit
+ C2EB 237E      		inx h! mov a,m ;first character
+CP/M RMAC ASSEM 1.1	#022	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C2ED D624      		sui '$' ;dollar file?
+ C2EF C2F6C2    		jnz pdollar
+                		;dollar file found, mark in lret
+ C2F2 3D3245BF  		dcr a! sta lret ;lret = 255
+                	pdollar:
+                		;now scan the disk map for allocated blocks
+ C2F6 0E01      		mvi c,1 ;set to allocated
+ C2F8 CD6BC2    		call scandm
+ C2FB CD8CC1    		call setcdr ;set cdrmax to dcnt
+ C2FE C3D2C2    		jmp initial2 ;for another entry
+                ;
+                copy$dirloc:
+                	;copy directory location to lret following
+                	;delete, rename, ... ops
+ C301 3AD4C9C301	lda dirloc! jmp sta$ret				;
+                ;	ret						;
+                ;
+                compext:
+                	;compare extent# in A with that in C, return nonzero
+                	;if they do not match
+ C307 C5        	push b ;save C's original value
+ C308 F53AC5C92F	push psw! lda extmsk! cma! mov b,a
+                	;B has negated form of extent mask
+ C30E 79A04F    	mov a,c! ana b! mov c,a ;low bits removed from C
+ C311 F1A0      	pop psw! ana b ;low bits removed from A
+ C313 91E61F    	sub c! ani maxext ;set flags
+ C316 C1        	pop b ;restore original values
+ C317 C9        	ret
+                ;
+                search:
+                	;search for directory element of length C at info
+ C318 3EFF32D4C9	mvi a,0ffh! sta dirloc ;changed if actually found
+ C31D 21D8C971  	lxi h,searchl! mov m,c ;searchl = C
+ C321 2A43BF22D9	lhld info! shld searcha ;searcha = info
+ C327 CDFEC1    	call set$end$dir ;dcnt = enddir
+ C32A CDA1BF    	call home ;to start at the beginning
+                	;(drop through to searchn)			;
+                ;
+                searchn:
+                	;search for the next directory element, assuming
+                	;a previous call on search which sets searcha and
+                	;searchl
+ C32D 0E00CD05C2	mvi c,false! call read$dir ;read next dir element
+ C332 CDF5C1CA94	call end$of$dir! jz search$fin ;skip to end if so
+                		;not end of directory, scan for match
+ C338 2AD9C9EB  		lhld searcha! xchg ;DE=beginning of user fcb
+ C33C 1A        		ldax d ;first character
+ C33D FEE5      		cpi empty ;keep scanning if empty
+ C33F CA4AC3    		jz searchnext
+                		;not empty, may be end of logical directory
+ C342 D5        		push d ;save search address
+ C343 CD7FC1    		call compcdr ;past logical end?
+ C346 D1        		pop d ;recall address
+ C347 D294C3    		jnc search$fin ;artificial stop
+                	searchnext:
+ C34A CD5EC1    		call getdptra ;HL = buffa+dptr
+CP/M RMAC ASSEM 1.1	#023	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C34D 3AD8C94F  		lda searchl! mov c,a ;length of search to c
+ C351 0600      		mvi b,0 ;b counts up, c counts down
+                		searchloop:
+ C353 79B7CA83C3			mov a,c! ora a! jz endsearch
+ C358 1AFE3FCA7C			ldax d! cpi '?'! jz searchok ;? matches all
+                			;scan next character if not ubytes
+ C35E 78FE0DCA7C			mov a,b! cpi ubytes! jz searchok
+                			;not the ubytes field, extent field?
+ C364 FE0C      			cpi extnum ;may be extent field
+ C366 1A        			ldax d ;fcb character
+ C367 CA73C3    			jz searchext ;skip to search extent
+ C36A 96E67F    			sub m! ani 7fh ;mask-out flags/extent modulus
+ C36D C22DC3    			jnz searchn ;skip if not matched
+ C370 C37CC3    			jmp searchok ;matched character
+                		searchext:
+                			;A has fcb character
+                			;attempt an extent # match
+ C373 C5        			push b ;save counters
+ C374 4E        			mov c,m ;directory character to c
+ C375 CD07C3    			call compext ;compare user/dir char
+ C378 C1        			pop b ;recall counters
+ C379 C22DC3    			jnz searchn ;skip if no match
+                		searchok:
+                			;current character matches
+ C37C 1323040D  			inx d! inx h! inr b! dcr c
+ C380 C353C3    			jmp searchloop
+                		endsearch:
+                			;entire name matches, return dir position
+ C383 3AEAC9E603			lda dcnt! ani dskmsk! sta lret
+                			;lret = low(dcnt) and 11b
+ C38B 21D4C97E17			lxi h,dirloc! mov a,m! ral! rnc ;dirloc=0ffh?
+                			;yes, change it to 0 to mark as found
+ C391 AF77      			xra a! mov m,a ;dirloc=0
+ C393 C9        			ret
+                		search$fin:
+                			;end of directory, or empty name
+ C394 CDFEC1    			call set$end$dir ;may be artifical end
+ C397 3EFFC301BF			mvi a,255! jmp sta$ret		;
+                ;
+                ;
+                delete:
+                	;delete the currently addressed file
+ C39C CD54C1    	call check$write ;write protected?
+ C39F 0E0CCD18C3	mvi c,extnum! call search ;search through file type
+                	delete0:
+                		;loop while directory matches
+ C3A4 CDF5C1C8  		call end$of$dir! rz ;stop if end
+                		;set each non zero disk map entry to 0
+                		;in the allocation vector
+                		;may be r/o file
+ C3A8 CD44C1    		call check$rodir ;ro disk error if found
+ C3AB CD5EC1    		call getdptra ;HL=.buff(dptr)
+ C3AE 36E5      		mvi m,empty
+ C3B0 0E00CD6BC2		mvi c,0! call scandm ;alloc elts set to 0
+ C3B5 CDC6C1    		call wrdir ;write the directory
+ C3B8 CD2DC3    		call searchn ;to next element
+CP/M RMAC ASSEM 1.1	#024	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C3BB C3A4C3    		jmp delete0 ;for another record
+                ;
+                get$block:
+                	;given allocation vector position BC, find the zero bit
+                	;closest to this position by searching left and right.
+                	;if found, set the bit to one and return the bit position
+                	;in hl.  if not found (i.e., we pass 0 on the left, or
+                	;maxall on the right), return 0000 in hl
+ C3BE 5059      	mov d,b! mov e,c ;copy of starting position to de
+                	lefttst:
+ C3C0 79B0CAD1C3		mov a,c! ora b! jz righttst ;skip if left=0000
+                		;left not at position zero, bit zero?
+ C3C5 0BD5C5    		dcx b! push d! push b ;left,right pushed
+ C3C8 CD35C2    		call getallocbit
+ C3CB 1FD2ECC3  		rar! jnc retblock ;return block number if zero
+                		;bit is one, so try the right
+ C3CF C1D1      		pop b! pop d ;left, right restored
+                	righttst:
+ C3D1 2AC6C9    		lhld maxall ;value of maximum allocation#
+ C3D4 7B957A9C  		mov a,e! sub l! mov a,d! sbb h ;right=maxall?
+ C3D8 D2F4C3    		jnc retblock0 ;return block 0000 if so
+ C3DB 13C5D5    		inx d! push b! push d ;left, right pushed
+ C3DE 424B      		mov b,d! mov c,e ;ready right for call
+ C3E0 CD35C2    		call getallocbit
+ C3E3 1FD2ECC3  		rar! jnc retblock ;return block number if zero
+ C3E7 D1C1      		pop d! pop b ;restore left and right pointers
+ C3E9 C3C0C3    		jmp lefttst ;for another attempt
+                	retblock:
+ C3EC 173C      		ral! inr a ;bit back into position and set to 1
+                		;d contains the number of shifts required to reposition
+ C3EE CD64C2    		call rotr ;move bit back to position and store
+ C3F1 E1D1      		pop h! pop d ;HL returned value, DE discarded
+ C3F3 C9        		ret
+                	retblock0:
+                		;cannot find an available bit, return 0000
+ C3F4 79        		mov a,c				;
+ C3F5 B0C2C0C3  		ora b! jnz lefttst	;also at beginning    
+ C3F9 210000C9  		lxi h,0000h! ret
+                ;
+                copy$fcb:
+                	;copy the entire file control block
+ C3FD 0E001E20  	mvi c,0! mvi e,fcblen ;start at 0, to fcblen-1
+                	;	jmp copy$dir			;
+                ;
+                copy$dir:
+                	;copy fcb information starting at C for E bytes
+                	;into the currently addressed directory entry
+ C401 D5        	push d ;save length for later
+ C402 0600      	mvi b,0 ;double index to BC
+ C404 2A43BF    	lhld info ;HL = source for data
+ C407 09EB      	dad b! xchg ;DE=.fcb(C), source for copy
+ C409 CD5EC1    	call getdptra ;HL=.buff(dptr), destination
+ C40C C1        	pop b ;DE=source, HL=dest, C=length
+ C40D CD4FBF    	call move ;data moved
+                seek$copy:
+                	;enter from close to seek and copy current element
+CP/M RMAC ASSEM 1.1	#025	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C410 CDC3BF    	call seek$dir ;to the directory element
+ C413 C3C6C1    	jmp wrdir ;write the directory element
+                	;ret
+                ;
+                ;
+                rename:
+                	;rename the file described by the first half of
+                	;the currently addressed file control block. the
+                	;new name is contained in the last half of the
+                	;currently addressed file conrol block.  the file
+                	;name and type are changed, but the reel number
+                	;is ignored.  the user number is identical
+ C416 CD54C1    	call check$write ;may be write protected
+                	;search up to the extent field
+ C419 0E0CCD18C3	mvi c,extnum! call search
+                	;copy position 0
+ C41E 2A43BF7E  	lhld info! mov a,m ;HL=.fcb(0), A=fcb(0)
+ C422 11100019  	lxi d,dskmap! dad d;HL=.fcb(dskmap)
+ C426 77        	mov m,a ;fcb(dskmap)=fcb(0)
+                	;assume the same disk drive for new named file
+                	rename0:
+ C427 CDF5C1C8  		call end$of$dir! rz ;stop at end of dir
+                		;not end of directory, rename next element
+ C42B CD44C1    		call check$rodir ;may be read-only file
+ C42E 0E101E0CCD		mvi c,dskmap! mvi e,extnum! call copy$dir
+                		;element renamed, move to next
+ C435 CD2DC3    		call searchn
+ C438 C327C4    		jmp rename0
+                ;
+                indicators:
+                	;set file indicators for current fcb
+ C43B 0E0CCD18C3	mvi c,extnum! call search ;through file type
+                	indic0:
+ C440 CDF5C1C8  		call end$of$dir! rz ;stop at end of dir
+                		;not end of directory, continue to change
+ C444 0E001E0C  		mvi c,0! mvi e,extnum ;copy name
+ C448 CD01C4    		call copy$dir
+ C44B CD2DC3    		call searchn
+ C44E C340C4    		jmp indic0
+                ;
+                open:
+                	;search for the directory entry, copy to fcb
+ C451 0E0FCD18C3	mvi c,namlen! call search
+ C456 CDF5C1C8  	call end$of$dir! rz ;return with lret=255 if end
+                	;not end of directory, copy fcb information
+                open$copy:
+                	;(referenced below to copy fcb info)
+ C45A CDA6C07EF5	call getexta! mov a,m! push psw! push h ;save extent#
+ C460 CD5EC1EB  	call getdptra! xchg ;DE = .buff(dptr)
+ C464 2A43BF    	lhld info ;HL=.fcb(0)
+ C467 0E20      	mvi c,nxtrec ;length of move operation
+ C469 D5        	push d ;save .buff(dptr)
+ C46A CD4FBF    	call move ;from .buff(dptr) to .fcb(0)
+                	;note that entire fcb is copied, including indicators
+ C46D CD78C1    	call setfwf ;sets file write flag
+ C470 D1210C0019	pop d! lxi h,extnum! dad d ;HL=.buff(dptr+extnum)
+CP/M RMAC ASSEM 1.1	#026	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C475 4E        	mov c,m ;C = directory extent number
+ C476 210F0019  	lxi h,reccnt! dad d ;HL=.buff(dptr+reccnt)
+ C47A 46        	mov b,m ;B holds directory record count
+ C47B E1F177    	pop h! pop psw! mov m,a ;restore extent number
+                	;HL = .user extent#, B = dir rec cnt, C = dir extent#
+                	;if user ext < dir ext then user := 128 records
+                	;if user ext = dir ext then user := dir records
+                	;if user ext > dir ext then user := 0 records
+ C47E 79BE78    		mov a,c! cmp m! mov a,b ;ready dir reccnt
+ C481 CA8BC4    		jz open$rcnt ;if same, user gets dir reccnt
+ C484 3E00DA8BC4		mvi a,0! jc open$rcnt ;user is larger
+ C489 3E80      		mvi a,128 ;directory is larger
+                	open$rcnt: ;A has record count to fill
+ C48B 2A43BF110F	lhld info! lxi d,reccnt! dad d! mov m,a
+ C493 C9        	ret
+                ;
+                mergezero:
+                	;HL = .fcb1(i), DE = .fcb2(i),
+                	;if fcb1(i) = 0 then fcb1(i) := fcb2(i)
+ C494 7E23B62BC0	mov a,m! inx h! ora m! dcx h! rnz ;return if = 0000
+ C499 1A771323  	ldax d! mov m,a! inx d! inx h ;low byte copied
+ C49D 1A771B2B  	ldax d! mov m,a! dcx d! dcx h ;back to input form
+ C4A1 C9        	ret
+                ;
+                close:
+                	;locate the directory element and re-write it
+ C4A2 AF3245BF32	xra a! sta lret! sta dcnt! sta dcnt+1	;
+ C4AC CD1EC1C0  	call nowrite! rnz ;skip close if r/o disk
+                	;check file write flag - 0 indicates written
+ C4B0 CD69C1    	call getmodnum ;fcb(modnum) in A
+ C4B3 E680C0    	ani fwfmsk! rnz ;return if bit remains set
+ C4B6 0E0FCD18C3	mvi c,namlen! call search ;locate file
+ C4BB CDF5C1C8  	call end$of$dir! rz ;return if not found
+                	;merge the disk map at info with that at buff(dptr)
+ C4BF 011000CD5E	lxi b,dskmap! call getdptra
+ C4C5 09EB      	dad b! xchg ;DE is .buff(dptr+16)
+ C4C7 2A43BF09  	lhld info! dad b ;DE=.buff(dptr+16), HL=.fcb(16)
+ C4CB 0E10      	mvi c,(fcblen-dskmap) ;length of single byte dm
+                	merge0:
+ C4CD 3ADDC9B7CA		lda single! ora a! jz merged ;skip to double
+                		;this is a single byte map
+                		;if fcb(i) = 0 then fcb(i) = buff(i)
+                		;if buff(i) = 0 then buff(i) = fcb(i)
+                		;if fcb(i) <> buff(i) then error
+ C4D4 7EB71AC2DB		mov a,m! ora a! ldax d! jnz fcbnzero
+                			;fcb(i) = 0
+ C4DA 77        			mov m,a ;fcb(i) = buff(i)
+                		fcbnzero:
+ C4DB B7C2E1C4  		ora a! jnz buffnzero
+                			;buff(i) = 0
+ C4DF 7E12      			mov a,m! stax d ;buff(i)=fcb(i)
+                		buffnzero:
+ C4E1 BEC21FC5  		cmp m! jnz mergerr ;fcb(i) = buff(i)?
+ C4E5 C3FDC4    		jmp dmset ;if merge ok
+                	merged:
+                		;this is a double byte merge operation
+CP/M RMAC ASSEM 1.1	#027	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C4E8 CD94C4    		call mergezero ;buff = fcb if buff 0000
+ C4EB EBCD94C4EB		xchg! call mergezero! xchg ;fcb = buff if fcb 0000
+                		;they should be identical at this point
+ C4F0 1ABEC21FC5		ldax d! cmp m! jnz mergerr ;low same?
+ C4F5 1323      		inx d! inx h ;to high byte
+ C4F7 1ABEC21FC5		ldax d! cmp m! jnz mergerr ;high same?
+                		;merge operation ok for this pair
+ C4FC 0D        		dcr c ;extra count for double byte
+                	dmset:
+ C4FD 1323      		inx d! inx h ;to next byte position
+ C4FF 0DC2CDC4  		dcr c! jnz merge0 ;for more
+                		;end of disk map merge, check record count
+                		;DE = .buff(dptr)+32, HL = .fcb(32)
+ C503 01ECFF09EB		lxi b,-(fcblen-extnum)! dad b! xchg! dad b
+                		;DE = .fcb(extnum), HL = .buff(dptr+extnum)
+ C509 1A        		ldax d ;current user extent number
+                		;if fcb(ext) >= buff(fcb) then
+                		;buff(ext) := fcb(ext), buff(rec) := fcb(rec)
+ C50A BEDA17C5  		cmp m! jc endmerge
+                		;fcb extent number >= dir extent number
+ C50E 77        		mov m,a ;buff(ext) = fcb(ext)
+                		;update directory record count field
+ C50F 01030009EB		lxi b,(reccnt-extnum)! dad b! xchg! dad b
+                		;DE=.buff(reccnt), HL=.fcb(reccnt)
+ C515 7E12      		mov a,m! stax d ;buff(reccnt)=fcb(reccnt)
+                	endmerge:
+ C517 3EFF32D2C9		mvi a,true! sta fcb$copied ;mark as copied
+ C51C C310C4    		jmp seek$copy ;ok to "wrdir" here - 1.4 compat
+                	;		ret				;
+                	mergerr:
+                		;elements did not merge correctly
+ C51F 2145BF35  		lxi h,lret! dcr m ;=255 non zero flag set
+ C523 C9        	ret
+                ;
+                make:
+                	;create a new file by creating a directory entry
+                	;then opening the file
+ C524 CD54C1    	call check$write ;may be write protected
+ C527 2A43BFE5  	lhld info! push h ;save fcb address, look for e5
+ C52B 21ACC92243	lxi h,efcb! shld info ;info = .empty
+ C531 0E01CD18C3	mvi c,1! call search ;length 1 match on empty entry
+ C536 CDF5C1    	call end$of$dir ;zero flag set if no space
+ C539 E1        	pop h ;recall info address
+ C53A 2243BF    	shld info ;in case we return here
+ C53D C8        	rz ;return with error condition 255 if not found
+ C53E EB        	xchg ;DE = info address
+                	;clear the remainder of the fcb
+ C53F 210F0019  	lxi h,namlen! dad d ;HL=.fcb(namlen)
+ C543 0E11      	mvi c,fcblen-namlen ;number of bytes to fill
+ C545 AF        	xra a ;clear accumulator to 00 for fill
+                	make0:
+ C546 77230DC246		mov m,a! inx h! dcr c! jnz make0
+ C54C 210D0019  	lxi h,ubytes! dad d ;HL = .fcb(ubytes)
+ C550 77        	mov m,a ;fcb(ubytes) = 0
+ C551 CD8CC1    	call setcdr ;may have extended the directory
+                	;now copy entry to the directory
+CP/M RMAC ASSEM 1.1	#028	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C554 CDFDC3    	call copy$fcb
+                	;and set the file write flag to "1"
+ C557 C378C1    	jmp setfwf
+                	;ret
+                ;
+                open$reel:
+                	;close the current extent, and open the next one
+                	;if possible.  RMF is true if in read mode
+ C55A AF32D2C9  		xra a! sta fcb$copied ;set true if actually copied
+ C55E CDA2C4    		call close ;close current extent
+                		;lret remains at enddir if we cannot open the next ext
+ C561 CDF5C1C8  		call end$of$dir! rz ;return if end
+                	;increment extent number
+ C565 2A43BF010C	lhld info! lxi b,extnum! dad b ;HL=.fcb(extnum)
+ C56C 7E3CE61F77	mov a,m! inr a! ani maxext! mov m,a ;fcb(extnum)=++1
+ C571 CA83C5    	jz open$mod ;move to next module if zero
+                	;may be in the same extent group
+ C574 473AC5C9A0	mov b,a! lda extmsk! ana b
+                	;if result is zero, then not in the same group
+ C579 21D2C9    	lxi h,fcb$copied ;true if the fcb was copied to directory
+ C57C A6        	ana m ;produces a 00 in accumulator if not written
+ C57D CA8EC5    	jz open$reel0 ;go to next physical extent
+                	;result is non zero, so we must be in same logical ext
+ C580 C3ACC5    	jmp open$reel1 ;to copy fcb information
+                	open$mod:
+                		;extent number overflow, go to next module
+ C583 01020009  		lxi b,(modnum-extnum)! dad b ;HL=.fcb(modnum)
+ C587 34        		inr m ;fcb(modnum)=++1
+                		;module number incremented, check for overflow
+ C588 7EE60F    		mov a,m! ani maxmod ;mask high order bits
+ C58B CAB6C5    		jz open$r$err ;cannot overflow to zero
+                		;otherwise, ok to continue with new module
+                	open$reel0:
+ C58E 0E0FCD18C3		mvi c,namlen! call search ;next extent found?
+ C593 CDF5C1C2AC		call end$of$dir! jnz open$reel1
+                			;end of file encountered
+ C599 3AD3C93C  			lda rmf! inr a ;0ffh becomes 00 if read
+ C59D CAB6C5    			jz open$r$err ;sets lret = 1
+                			;try to extend the current file
+ C5A0 CD24C5    			call make
+                			;cannot be end of directory
+ C5A3 CDF5C1    			call end$of$dir
+ C5A6 CAB6C5    			jz open$r$err ;with lret = 1
+ C5A9 C3AFC5    			jmp open$reel2
+                		open$reel1:
+                			;not end of file, open
+ C5AC CD5AC4    			call open$copy
+                		open$reel2:
+ C5AF CDBBC0    			call getfcb ;set parameters
+ C5B2 AFC301BF  			xra a! jmp sta$ret ;lret = 0	;
+                ;			ret ;with lret = 0
+                	open$r$err:
+                		;cannot move to next extent of this file
+ C5B6 CD05BF    		call setlret1 ;lret = 1
+ C5B9 C378C1    		jmp setfwf ;ensure that it will not be closed
+                		;ret
+CP/M RMAC ASSEM 1.1	#029	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                ;
+                seqdiskread:
+                	;sequential disk read operation
+ C5BC 3E0132D5C9	mvi a,1! sta seqio
+                	;drop through to diskread
+                ;
+                diskread:	;(may enter from seqdiskread)
+ C5C1 3EFF32D3C9	mvi a,true! sta rmf ;read mode flag = true (open$reel)
+                	;read the next record from the current fcb
+ C5C6 CDBBC0    	call getfcb ;sets parameters for the read
+ C5C9 3AE3C921E1	lda vrecord! lxi h,rcount! cmp m ;vrecord-rcount
+                	;skip if rcount > vrecord
+ C5D0 DAE6C5    	jc recordok
+                		;not enough records in the extent
+                		;record count must be 128 to continue
+ C5D3 FE80      		cpi 128 ;vrecord = 128?
+ C5D5 C2FBC5    		jnz diskeof ;skip if vrecord<>128
+ C5D8 CD5AC5    		call open$reel ;go to next extent if so
+ C5DB AF32E3C9  		xra a! sta vrecord ;vrecord=00
+                		;now check for open ok
+ C5DF 3A45BFB7C2		lda lret! ora a! jnz diskeof ;stop at eof
+                	recordok:
+                		;arrive with fcb addressing a record to read
+ C5E6 CD77C0    		call index
+                		;error 2 if reading unwritten data
+                		;(returns 1 to be compatible with 1.4)
+ C5E9 CD84C0    		call allocated ;arecord=0000?
+ C5EC CAFBC5    		jz diskeof
+                		;record has been allocated, read it
+ C5EF CD8AC0    		call atran ;arecord now a disk address
+ C5F2 CDD1BF    		call seek ;to proper track,sector
+ C5F5 CDB2BF    		call rdbuff ;to dma address
+ C5F8 C3D2C0    		jmp setfcb ;replace parameter	
+                ;		ret					;
+                	diskeof:
+ C5FB C305BF    		jmp setlret1 ;lret = 1
+                		;ret
+                ;
+                seqdiskwrite:
+                	;sequential disk write
+ C5FE 3E0132D5C9	mvi a,1! sta seqio
+                	;drop through to diskwrite
+                ;
+                diskwrite:	;(may enter here from seqdiskwrite above)
+ C603 3E0032D3C9	mvi a,false! sta rmf ;read mode flag
+                	;write record to currently selected file
+ C608 CD54C1    	call check$write ;in case write protected
+ C60B 2A43BF    	lhld info ;HL = .fcb(0)
+ C60E CD47C1    	call check$rofile ;may be a read-only file
+ C611 CDBBC0    	call getfcb ;to set local parameters
+ C614 3AE3C9FE80	lda vrecord! cpi lstrec+1 ;vrecord-128
+                	;skip if vrecord > lstrec
+                		;vrecord = 128, cannot open next extent
+ C619 D205BF    		jnc setlret1	 ;lret=1		;
+                	diskwr0:
+                	;can write the next record, so continue
+CP/M RMAC ASSEM 1.1	#030	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C61C CD77C0    	call index
+ C61F CD84C0    	call allocated
+ C622 0E00      	mvi c,0 ;marked as normal write operation for wrbuff
+ C624 C26EC6    	jnz diskwr1
+                		;not allocated
+                		;the argument to getblock is the starting
+                		;position for the disk search, and should be
+                		;the last allocated block for this file, or
+                		;the value 0 if no space has been allocated
+ C627 CD3EC0    		call dm$position
+ C62A 32D7C9    		sta dminx ;save for later
+ C62D 010000    		lxi b,0000h ;may use block zero
+ C630 B7CA3BC6  		ora a! jz nopblock ;skip if no previous block
+                			;previous block exists at A
+ C634 4F0B      			mov c,a! dcx b ;previous block # in BC
+ C636 CD5EC0    			call getdm ;previous block # to HL
+ C639 444D      			mov b,h! mov c,l ;BC=prev block#
+                		nopblock:
+                			;BC = 0000, or previous block #
+ C63B CDBEC3    			call get$block ;block # to HL
+                		;arrive here with block# or zero
+ C63E 7DB4C248C6		mov a,l! ora h! jnz blockok
+                			;cannot find a block to allocate
+ C643 3E02C301BF			mvi a,2! jmp sta$ret 	;lret=2	
+                		blockok:
+                		;allocated block number is in HL
+ C648 22E5C9    		shld arecord
+ C64B EB        		xchg ;block number to DE
+ C64C 2A43BF0110		lhld info! lxi b,dskmap! dad b ;HL=.fcb(dskmap)
+ C653 3ADDC9B7  		lda single! ora a ;set flags for single byte dm
+ C657 3AD7C9    		lda dminx ;recall dm index
+ C65A CA64C6    		jz allocwd ;skip if allocating word
+                			;allocating a byte value
+ C65D CD64C173  			call addh! mov m,e ;single byte alloc
+ C661 C36CC6    			jmp diskwru ;to continue
+                		allocwd:
+                		;allocate a word value
+ C664 4F0600    			mov c,a! mvi b,0 ;double(dminx)
+ C667 0909      			dad b! dad b ;HL=.fcb(dminx*2)
+ C669 732372    			mov m,e! inx h! mov m,d ;double wd
+                		diskwru:
+                		;disk write to previously unallocated block
+ C66C 0E02      		mvi c,2 ;marked as unallocated write
+                	diskwr1:
+                	;continue the write operation of no allocation error
+                	;C = 0 if normal write, 2 if to prev unalloc block
+ C66E 3A45BFB7C0	lda lret! ora a! rnz ;stop if non zero returned value
+ C673 C5        	push b ;save write flag
+ C674 CD8AC0    	call atran ;arecord set
+ C677 3AD5C93D3D		lda seqio! dcr a! dcr a! jnz diskwr11   ;
+ C67F C1C5793D3D		pop b! push b! mov a,c! dcr a! dcr a	;
+ C684 C2BBC6    		jnz diskwr11		;old allocation  
+ C687 E5        		push h		;arecord in hl ret from atran
+ C688 2AB9C957  		lhld buffa! mov d,a	;zero buffa & fill 
+ C68C 772314F28C	fill0:  mov m,a! inx h! inr d! jp fill0		;
+ C692 CDE0C12AE7		call setdir! lhld arecord1		;
+CP/M RMAC ASSEM 1.1	#031	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C698 0E02      		mvi c,2					;
+ C69A 22E5C9C5CD	fill1:  shld arecord! push b! call seek! pop b  ;
+ C6A2 CDB8BF    		call wrbuff	;write fill record	;
+ C6A5 2AE5C9    		lhld arecord!	;restore last record     
+ C6A8 0E00      		mvi c,0		;change  allocate flag   
+ C6AA 3AC4C947A5		lda blkmsk! mov b,a! ana l! cmp b!inx h	;
+ C6B1 C29AC6    		jnz fill1	;cont until cluster is zeroed
+ C6B4 E122E5C9CD		pop h! shld arecord! call setdata
+                	diskwr11:					;
+ C6BB CDD1BF    	call seek ;to proper file position
+ C6BE C1C5      	pop b! push b ;restore/save write flag (C=2 if new block)
+ C6C0 CDB8BF    	call wrbuff ;written to disk
+ C6C3 C1        	pop b ;C = 2 if a new block was allocated, 0 if not
+                	;increment record count if rcount<=vrecord
+ C6C4 3AE3C921E1	lda vrecord! lxi h,rcount! cmp m ;vrecord-rcount
+ C6CB DAD2C6    	jc diskwr2
+                		;rcount <= vrecord
+ C6CE 7734      		mov m,a! inr m ;rcount = vrecord+1
+ C6D0 0E02      		mvi c,2 ;mark as record count incremented
+                	diskwr2:
+                	;A has vrecord, C=2 if new block or new record#
+ C6D2 0D0DC2DFC6	dcr c! dcr c! jnz noupdate
+ C6D7 F5        		push psw ;save vrecord value
+ C6D8 CD69C1    		call getmodnum ;HL=.fcb(modnum), A=fcb(modnum)
+                		;reset the file write flag to mark as written fcb
+ C6DB E67F      		ani (not fwfmsk) and 0ffh ;bit reset
+ C6DD 77        		mov m,a ;fcb(modnum) = fcb(modnum) and 7fh
+ C6DE F1        		pop psw ;restore vrecord
+                	noupdate:
+                	;check for end of extent, if found attempt to open
+                	;next extent in preparation for next write
+ C6DF FE7F      	cpi lstrec ;vrecord=lstrec?
+ C6E1 C200C7    	jnz diskwr3 ;skip if not
+                	;may be random access write, if so we are done
+                					;change next     
+ C6E4 3AD5C9FE01	lda seqio! cpi 1! jnz diskwr3 ;skip next extent open op
+                		;update current fcb before going to next extent
+ C6EC CDD2C0    		call setfcb
+ C6EF CD5AC5    		call open$reel ;rmf=false
+                		;vrecord remains at lstrec causing eof if
+                		;no more directory space is available
+ C6F2 2145BF7EB7		lxi h,lret! mov a,m! ora a! jnz nospace
+                			;space available, set vrecord=255
+ C6FA 3D32E3C9  			dcr a! sta vrecord ;goes to 00 next time
+                		nospace:
+ C6FE 3600      		mvi m,0 ;lret = 00 for returned value
+                	diskwr3:
+ C700 C3D2C0    	jmp setfcb ;replace parameters
+                	;ret
+                ;
+                rseek:
+                	;random access seek operation, C=0ffh if read mode
+                	;fcb is assumed to address an active file control block
+                	;(modnum has been set to 1100$0000b if previous bad seek)
+ C703 AF32D5C9  	xra a! sta seqio ;marked as random access operation
+                rseek1:
+CP/M RMAC ASSEM 1.1	#032	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C707 C5        	push b ;save r/w flag
+ C708 2A43BFEB  	lhld info! xchg ;DE will hold base of fcb
+ C70C 21210019  		lxi h,ranrec! dad d ;HL=.fcb(ranrec)
+ C710 7EE67FF5  		mov a,m! ani 7fh! push psw ;record number
+ C714 7E17      		mov a,m! ral ;cy=lsb of extent#
+ C716 237E17E61F		inx h! mov a,m! ral! ani 11111b ;A=ext#
+ C71B 4F        		mov c,a ;C holds extent number, record stacked
+ C71C 7E1F1F1F1F		mov a,m! rar! rar! rar! rar! ani 1111b ;mod#
+ C723 47        		mov b,a ;B holds module#, C holds ext#
+ C724 F1        		pop psw ;recall sought record #
+                		;check to insure that high byte of ran rec = 00
+ C725 236E      		inx h! mov l,m ;l=high byte (must be 00)
+ C727 2C2D2E06  		inr l! dcr l! mvi l,6 ;zero flag, l=6
+                		;produce error 6, seek past physical eod
+ C72B C28BC7    		jnz seekerr
+                		;otherwise, high byte = 0, A = sought record
+ C72E 21200019  		lxi h,nxtrec! dad d ;HL = .fcb(nxtrec)
+ C732 77        		mov m,a ;sought rec# stored away
+                	;arrive here with B=mod#, C=ext#, DE=.fcb, rec stored
+                	;the r/w flag is still stacked.  compare fcb values
+ C733 210C001979		lxi h,extnum! dad d! mov a,c ;A=seek ext#
+ C738 96C247C7  		sub m! jnz ranclose ;tests for = extents
+                		;extents match, check mod#
+ C73C 210E001978		lxi h,modnum! dad d! mov a,b ;B=seek mod#
+                		;could be overflow at eof, producing module#
+                		;of 90H or 10H, so compare all but fwf
+ C741 96E67FCA7F		sub m! ani 7fh! jz seekok ;same?
+                	ranclose:
+ C747 C5D5      		push b! push d ;save seek mod#,ext#, .fcb
+ C749 CDA2C4    		call close ;current extent closed
+ C74C D1C1      		pop d! pop b ;recall parameters and fill
+ C74E 2E03      		mvi l,3 ;cannot close error #3
+ C750 3A45BF3CCA		lda lret! inr a! jz badseek
+ C757 210C001971		lxi h,extnum! dad d! mov m,c ;fcb(extnum)=ext#
+ C75C 210E001970		lxi h,modnum! dad d! mov m,b ;fcb(modnum)=mod#
+ C761 CD51C4    		call open ;is the file present?
+ C764 3A45BF3CC2		lda lret! inr a! jnz seekok ;open successful?
+                		;cannot open the file, read mode?
+ C76B C1        		pop b ;r/w flag to c (=0ffh if read)
+ C76C C5        		push b ;everyone expects this item stacked
+ C76D 2E04      		mvi l,4 ;seek to unwritten extent #4
+ C76F 0C        		inr c ;becomes 00 if read operation
+ C770 CA84C7    		jz badseek ;skip to error if read operation
+                		;write operation, make new extent
+ C773 CD24C5    		call make
+ C776 2E05      		mvi l,5 ;cannot create new extent #5
+ C778 3A45BF3CCA		lda lret! inr a! jz badseek ;no dir space
+                		;file make operation successful
+                	seekok:
+ C77F C1        		pop b ;discard r/w flag
+ C780 AFC301BF  		xra a! jmp sta$ret 	;with zero set	
+                	badseek:
+                		;fcb no longer contains a valid fcb, mark
+                		;with 1100$000b in modnum field so that it
+                		;appears as overflow with file write flag set
+ C784 E5        		push h ;save error flag
+CP/M RMAC ASSEM 1.1	#033	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C785 CD69C1    		call getmodnum ;HL = .modnum
+ C788 36C0      		mvi m,1100$0000b
+ C78A E1        		pop h ;and drop through
+                	seekerr:
+ C78B C1        		pop b ;discard r/w flag
+ C78C 7D3245BF  		mov a,l! sta lret ;lret=#, nonzero
+                		;setfwf returns non-zero accumulator for err
+ C790 C378C1    		jmp setfwf ;flag set, so subsequent close ok
+                		;ret
+                ;
+                randiskread:
+                	;random disk read operation
+ C793 0EFF      	mvi c,true ;marked as read operation
+ C795 CD03C7    	call rseek
+ C798 CCC1C5    	cz diskread ;if seek successful
+ C79B C9        	ret
+                ;
+                randiskwrite:
+                	;random disk write operation
+ C79C 0E00      	mvi c,false ;marked as write operation
+ C79E CD03C7    	call rseek
+ C7A1 CC03C6    	cz diskwrite ;if seek successful
+ C7A4 C9        	ret
+                ;
+                compute$rr:
+                	;compute random record position for getfilesize/setrandom
+ C7A5 EB19      	xchg! dad d
+                	;DE=.buf(dptr) or .fcb(0), HL = .f(nxtrec/reccnt)
+ C7A7 4E0600    	mov c,m! mvi b,0 ;BC = 0000 0000 ?rrr rrrr
+ C7AA 210C00197E	lxi h,extnum! dad d! mov a,m! rrc! ani 80h ;A=e000 0000
+ C7B2 814F3E0088	add c! mov c,a! mvi a,0! adc b! mov b,a
+                	;BC = 0000 000? errrr rrrr
+ C7B8 7E0FE60F80	mov a,m! rrc! ani 0fh! add b! mov b,a
+                	;BC = 000? eeee errrr rrrr
+ C7BE 210E00197E	lxi h,modnum! dad d! mov a,m ;A=XXX? mmmm
+ C7C3 87878787  	add a! add a! add a! add a ;cy=? A=mmmm 0000
+ C7C7 F58047    	push psw! add b! mov b,a
+                	;cy=?, BC = mmmm eeee errr rrrr
+ C7CA F5        	push psw ;possible second carry
+ C7CB E1        	pop h ;cy = lsb of L
+ C7CC 7D        	mov a,l ;cy = lsb of A
+ C7CD E1        	pop h ;cy = lsb of L
+ C7CE B5        	ora l ;cy/cy = lsb of A
+ C7CF E601      	ani 1 ;A = 0000 000? possible carry-out
+ C7D1 C9        	ret
+                ;
+                getfilesize:
+                	;compute logical file size for current fcb
+ C7D2 0E0C      	mvi c,extnum
+ C7D4 CD18C3    	call search
+                	;zero the receiving ranrec field
+ C7D7 2A43BF1121	lhld info! lxi d,ranrec! dad d! push h ;save position
+ C7DF 7223722372	mov m,d! inx h! mov m,d! inx h! mov m,d;=00 00 00
+                	getsize:
+ C7E4 CDF5C1    		call end$of$dir
+ C7E7 CA0CC8    		jz setsize
+CP/M RMAC ASSEM 1.1	#034	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                		;current fcb addressed by dptr
+ C7EA CD5EC1110F		call getdptra! lxi d,reccnt ;ready for compute size
+ C7F0 CDA5C7    		call compute$rr
+                		;A=0000 000? BC = mmmm eeee errr rrrr
+                		;compare with memory, larger?
+ C7F3 E1E5      		pop h! push h ;recall, replace .fcb(ranrec)
+ C7F5 5F        		mov e,a ;save cy
+ C7F6 799623    		mov a,c! sub m! inx h ;ls byte
+ C7F9 789E23    		mov a,b! sbb m! inx h ;middle byte
+ C7FC 7B9E      		mov a,e! sbb m ;carry if .fcb(ranrec) > directory
+ C7FE DA06C8    		jc getnextsize ;for another try
+                		;fcb is less or equal, fill from directory
+ C801 732B702B71		mov m,e! dcx h! mov m,b! dcx h! mov m,c
+                	getnextsize:
+ C806 CD2DC3    		call searchn
+ C809 C3E4C7    		jmp getsize
+                	setsize:
+ C80C E1        	pop h ;discard .fcb(ranrec)
+ C80D C9        	ret
+                ;
+                setrandom:
+                	;set random record from the current file control block
+ C80E 2A43BF1120	lhld info! lxi d,nxtrec ;ready params for computesize
+ C814 CDA5C7    	call compute$rr ;DE=info, A=cy, BC=mmmm eeee errr rrrr
+ C817 21210019  	lxi h,ranrec! dad d ;HL = .fcb(ranrec)
+ C81B 7123702377	mov m,c! inx h! mov m,b! inx h! mov m,a ;to ranrec
+ C820 C9        	ret
+                ;
+                select:
+                	;select disk info for subsequent input or output ops
+ C821 2AAFC93A42	lhld dlog! lda curdsk! mov c,a! call hlrotr
+ C82B E5EB      	push h! xchg ;save it for test below, send to seldsk
+ C82D CD59BFE1  	call selectdisk! pop h ;recall dlog vector
+ C831 CC47BF    	cz sel$error ;returns true if select ok
+                	;is the disk logged in?
+ C834 7D1FD8    	mov a,l! rar! rc ;return if bit is set
+                	;disk not logged in, set bit and initialize
+ C837 2AAFC94D44	lhld dlog! mov c,l! mov b,h ;call ready
+ C83C CD0BC122AF	call set$cdisk! shld dlog ;dlog=set$cdisk(dlog)
+ C842 C3A3C2    	jmp initialize
+                	;ret
+                ;
+                curselect:
+ C845 3AD6C92142	lda linfo! lxi h,curdsk! cmp m! rz ;skip if linfo=curdsk
+ C84D 77        	mov m,a ;curdsk=info
+ C84E C321C8    	jmp select
+                	;ret
+                ;
+                reselect:
+                	;check current fcb to see if reselection necessary
+ C851 3EFF32DEC9	mvi a,true! sta resel ;mark possible reselect
+ C856 2A43BF7E  	lhld info! mov a,m ;drive select code
+ C85A E61F      	ani 1$1111b ;non zero is auto drive select
+ C85C 3D        	dcr a ;drive code normalized to 0..30, or 255
+ C85D 32D6C9    	sta linfo ;save drive code
+ C860 FE1ED275C8	cpi 30! jnc noselect
+CP/M RMAC ASSEM 1.1	#035	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+                		;auto select function, save curdsk
+ C865 3A42BF32DF		lda curdsk! sta olddsk ;olddsk=curdsk
+ C86B 7E32E0C9  		mov a,m! sta fcbdsk ;save drive code
+ C86F E6E077    		ani 1110$0000b! mov m,a ;preserve hi bits
+ C872 CD45C8    		call curselect
+                	noselect:
+                		;set user code
+ C875 3A41BF    		lda usrcode ;0...31
+ C878 2A43BFB677		lhld info! ora m! mov m,a
+ C87D C9        		ret
+                ;
+                ;	individual function handlers
+                func12:
+                	;return version number
+ C87E 3E22C301BF	mvi a,dvers! jmp sta$ret ;lret = dvers (high = 00)
+                ;	ret ;jmp goback
+                ;
+                func13:
+                	;reset disk system - initialize to disk 0
+ C883 21000022AD	lxi h,0! shld rodsk! shld dlog
+ C88C AF3242BF  	xra a! sta curdsk ;note that usrcode remains unchanged
+ C890 21800022B1	lxi h,tbuff! shld dmaad ;dmaad = tbuff
+ C896 CDDAC1            call setdata ;to data dma address
+ C899 C321C8    	jmp select
+                	;ret ;jmp goback
+                ;
+ C845 =         func14:	equ	curselect			;
+                	;select disk info
+                	;ret ;jmp goback
+                ;
+                func15:
+                	;open file
+ C89C CD72C1    	call clrmodnum ;clear the module number
+ C89F CD51C8    	call reselect
+ C8A2 C351C4    	jmp open
+                	;ret ;jmp goback
+                ;
+                func16:
+                	;close file
+ C8A5 CD51C8    	call reselect
+ C8A8 C3A2C4    	jmp close
+                	;ret ;jmp goback
+                ;
+                func17:
+                	;search for first occurrence of a file
+ C8AB 0E00      	mvi c,0 ;length assuming '?' true
+ C8AD EB        	xchg		;was lhld info		
+ C8AE 7EFE3F    	mov a,m! cpi '?' ;no reselect if ?
+ C8B1 CAC2C8    	jz qselect ;skip reselect if so
+                		;normal search
+ C8B4 CDA6C07EFE		call getexta! mov a,m! cpi '?'	;	
+ C8BA C472C1    		cnz clrmodnum ;module number zeroed
+ C8BD CD51C8    		call reselect
+ C8C0 0E0F      		mvi c,namlen
+                	qselect:
+ C8C2 CD18C3    	call search
+CP/M RMAC ASSEM 1.1	#036	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C8C5 C3E9C1    	jmp dir$to$user ;copy directory entry to user
+                	;ret ;jmp goback
+                ;
+                func18:
+                	;search for next occurrence of a file name
+ C8C8 2AD9C92243	lhld searcha! shld info
+ C8CE CD51C8CD2D	call reselect! call searchn
+ C8D4 C3E9C1    	jmp dir$to$user ;copy directory entry to user
+                	;ret ;jmp goback
+                ;
+                func19:
+                	;delete a file
+ C8D7 CD51C8    	call reselect
+ C8DA CD9CC3    	call delete
+ C8DD C301C3    	jmp copy$dirloc
+                	;ret ;jmp goback
+                ;
+                func20:
+                	;read a file
+ C8E0 CD51C8    	call reselect
+ C8E3 C3BCC5    	jmp seqdiskread				;
+                	 ;jmp goback
+                ;
+                func21:
+                	;write a file
+ C8E6 CD51C8    	call reselect
+ C8E9 C3FEC5    	jmp seqdiskwrite			;
+                	 ;jmp goback
+                ;
+                func22:
+                	;make a file
+ C8EC CD72C1    	call clrmodnum
+ C8EF CD51C8    	call reselect
+ C8F2 C324C5    	jmp make
+                	;ret ;jmp goback
+                ;
+                func23:
+                	;rename a file
+ C8F5 CD51C8    	call reselect
+ C8F8 CD16C4    	call rename
+ C8FB C301C3    	jmp copy$dirloc
+                	;ret ;jmp goback
+                ;
+                func24:
+                	;return the login vector
+ C8FE 2AAFC9C329	lhld dlog! jmp sthl$ret			;
+                ;	ret ;jmp goback
+                ;
+                func25:
+                	;return selected disk number
+ C904 3A42BFC301	lda curdsk! jmp sta$ret			;
+                ;	ret ;jmp goback
+                ;
+                func26:
+                	;set the subsequent dma address to info
+ C90A EB        	xchg		;was lhld info	
+CP/M RMAC ASSEM 1.1	#037	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C90B 22B1C9    	shld dmaad ;dmaad = info
+ C90E C3DAC1            jmp setdata ;to data dma address
+                	;ret ;jmp goback
+                ;
+                func27:
+                	;return the login vector address
+ C911 2ABFC9C329	lhld alloca! jmp sthl$ret		;
+                ;	ret ;jmp goback
+                ;
+ C12C =         func28:	equ	set$ro				;
+                	;write protect current disk
+                	;ret ;jmp goback
+                ;
+                func29:
+                	;return r/o bit vector
+ C917 2AADC9C329	lhld rodsk! jmp sthl$ret		;
+                ;	ret ;jmp goback
+                ;
+                func30:
+                	;set file indicators
+ C91D CD51C8    	call reselect
+ C920 CD3BC4    	call indicators
+ C923 C301C3    	jmp copy$dirloc ;lret=dirloc
+                	;ret ;jmp goback
+                ;
+                func31:
+                	;return address of disk parameter block
+ C926 2ABBC9    	lhld dpbaddr
+                sthl$ret:
+ C929 2245BF     	shld aret
+ C92C C9        	ret ;jmp goback
+                func32:
+                	;set user code
+ C92D 3AD6C9FEFF        lda linfo! cpi 0ffh! jnz setusrcode
+                		;interrogate user code instead
+ C935 3A41BFC301		lda usrcode! jmp sta$ret ;lret=usrcode	
+                ;		ret ;jmp goback
+                	setusrcode:
+ C93B E61F3241BF		ani 1fh! sta usrcode
+ C940 C9        		ret ;jmp goback
+                ;
+                func33:
+                	;random disk read operation
+ C941 CD51C8    	call reselect
+ C944 C393C7    	jmp randiskread ;to perform the disk read
+                	;ret ;jmp goback
+                ;
+                func34:
+                	;random disk write operation
+ C947 CD51C8    	call reselect
+ C94A C39CC7    	jmp randiskwrite ;to perform the disk write
+                	;ret ;jmp goback
+                ;
+                func35:
+                	;return file size (0-65536)
+ C94D CD51C8    	call reselect
+CP/M RMAC ASSEM 1.1	#038	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C950 C3D2C7    	jmp getfilesize
+                	;ret ;jmp goback
+                ;
+ C80E =         func36:	equ	setrandom			;
+                	;set random record
+                	;ret ;jmp goback
+                func37:
+                ;
+ C953 2A43BF    	lhld	info
+ C956 7D2F5F7C2F	mov	a,l! cma! mov e,a! mov a,h! cma
+ C95B 2AAFC9A457	lhld dlog! ana h! mov d,a! mov a,l! ana e
+ C962 5F2AADC9EB	mov e,a! lhld rodsk! xchg! shld dlog
+ C96A 7DA36F    	mov a,l! ana e! mov l,a
+ C96D 7CA267    	mov a,h! ana d! mov h,a
+ C970 22ADC9C9  	shld rodsk! ret
+                ;
+                ;
+                goback:
+                	;arrive here at end of processing to return to user
+ C974 3ADEC9B7CA	lda resel! ora a! jz retmon
+                		;reselection may have taken place
+ C97B 2A43BF3600		lhld info! mvi m,0 ;fcb(0)=0
+ C980 3AE0C9B7CA		lda fcbdsk! ora a! jz retmon
+                		;restore disk number
+ C987 77        		mov m,a ;fcb(0)=fcbdsk
+ C988 3ADFC932D6		lda olddsk! sta linfo! call curselect
+                ;
+                ;	return from the disk monitor
+                retmon:
+ C991 2A0FBFF9  	lhld entsp! sphl ;user stack restored
+ C995 2A45BF7D44	lhld aret! mov a,l! mov b,h ;BA = HL = aret
+ C99A C9        	ret
+ BF04 =         func38:	equ	func$ret
+ BF04 =         func39	equ	func$ret
+                func40:
+                	;random disk write with zero fill of unallocated block
+ C99B CD51C8    	call reselect
+ C99E 3E0232D5C9	mvi a,2! sta seqio
+ C9A3 0E00      	mvi	c,false
+ C9A5 CD07C7    	call	rseek1
+ C9A8 CC03C6    	cz	diskwrite	;if seek successful
+ C9AB C9        	ret
+                ;
+                ;
+                ;	data areas
+                ;
+                ;	initialized data
+ C9AC E5        efcb:	db	empty	;0e5=available dir entry
+ C9AD 0000      rodsk:	dw	0	;read only disk vector
+ C9AF 0000      dlog:	dw	0	;logged-in disks
+ C9B1 8000      dmaad:	dw	tbuff	;initial dma address
+                ;
+                ;	curtrka - alloca are set upon disk select
+                ;	(data must be adjacent, do not insert variables)
+                ;	(address of translate vector, not used)
+ C9B3           cdrmaxa:ds	word	;pointer to cur dir max value
+CP/M RMAC ASSEM 1.1	#039	BDOS INTERFACE, BDOS, VERSION 2.2 FEB, 1980
+
+ C9B5           curtrka:ds	word	;current track address
+ C9B7           curreca:ds	word	;current record address
+ C9B9           buffa:	ds	word	;pointer to directory dma address
+ C9BB           dpbaddr:ds	word	;current disk parameter block address
+ C9BD           checka:	ds	word	;current checksum vector address
+ C9BF           alloca:	ds	word	;current allocation vector address
+ 0008 =         addlist	equ	$-buffa	;address list size
+                ;
+                ;	sectpt - offset obtained from disk parm block at dpbaddr
+                ;	(data must be adjacent, do not insert variables)
+ C9C1           sectpt:	ds	word	;sectors per track
+ C9C3           blkshf:	ds	byte	;block shift factor
+ C9C4           blkmsk:	ds	byte	;block mask
+ C9C5           extmsk:	ds	byte	;extent mask
+ C9C6           maxall:	ds	word	;maximum allocation number
+ C9C8           dirmax:	ds	word	;largest directory number
+ C9CA           dirblk:	ds	word	;reserved allocation bits for directory
+ C9CC           chksiz:	ds	word	;size of checksum vector
+ C9CE           offset:	ds	word	;offset tracks at beginning
+ 000F =         dpblist	equ	$-sectpt	;size of area
+                ;
+                ;	local variables
+ C9D0           tranv:	ds	word	;address of translate vector
+                fcb$copied:
+ C9D2           	ds	byte	;set true if copy$fcb called
+ C9D3           rmf:	ds	byte	;read mode flag for open$reel
+ C9D4           dirloc:	ds	byte	;directory flag in rename, etc.
+ C9D5           seqio:	ds	byte	;1 if sequential i/o
+ C9D6           linfo:	ds	byte	;low(info)
+ C9D7           dminx:	ds	byte	;local for diskwrite
+ C9D8           searchl:ds	byte	;search length
+ C9D9           searcha:ds	word	;search address
+ C9DB           tinfo:	ds	word	;temp for info in "make"
+ C9DD           single:	ds	byte	;set true if single byte allocation map
+ C9DE           resel:	ds	byte	;reselection flag
+ C9DF           olddsk:	ds	byte	;disk on entry to bdos
+ C9E0           fcbdsk:	ds	byte	;disk named in fcb
+ C9E1           rcount:	ds	byte	;record count in current fcb
+ C9E2           extval:	ds	byte	;extent number and extmsk
+ C9E3           vrecord:ds	word	;current virtual record
+ C9E5           arecord:ds	word	;current actual record
+ C9E7           arecord1:	ds	word	;current actual block# * blkmsk
+                ;
+                ;	local variables for directory access
+ C9E9           dptr:	ds	byte	;directory pointer 0,1,2,3
+ C9EA           dcnt:	ds	word	;directory counter 0,1,...,dirmax
+ C9EC           drec:	ds	word	;directory record 0,1,...,dirmax/4
+                ;
+                ;current equ $ and 0ff00h (syntax not appreciated by rmac either .com or .exe
+ C9EE           	ds	18	; workaround for rmac to put BIOS on a page boundry.
+                			; This is really just a test exercise for rmac because if the
+                			; BDOS is org'ed very high, no linker could link it anyway.
+                			; But it still should assemble OK if zxcc is running it
+                			; correctly and it does.
+ CA00 =         bios	equ	$	;next module
+ CA00           	end
+
