@@ -1,0 +1,14 @@
+; program to exit from tlbcpm.exe gracefully
+; Uses phony BDOS function 240
+; Tom Burnett - Jan 2015
+;
+.Z80
+ASEG
+BDOS EQU 0005h
+BYEBYE EQU 240
+
+	ORG 100h
+start:	ld c, BYEBYE ; load Bdos func 240 - special used here only */
+		call BDOS	; Won't come back
+		end
+

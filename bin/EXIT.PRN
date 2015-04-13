@@ -1,0 +1,30 @@
+	MACRO-80 3.44	09-Dec-81	PAGE	1
+
+
+                                ; program to exit from tlbcpm.exe gracefully
+                                ; Uses phony BDOS function 240
+                                ; Tom Burnett - Jan 2015
+                                ;
+                                .Z80
+  0000'                         ASEG
+  0005                          BDOS EQU 0005h
+  00F0                          BYEBYE EQU 240
+                                
+                                	ORG 100h
+  0100    0E F0                 start:	ld c, BYEBYE ; load Bdos func 240 - special used here only */
+  0102    CD 0005               		call BDOS	; Won't come back
+                                		end
+	MACRO-80 3.44	09-Dec-81	PAGE	S
+
+
+Macros:
+
+Symbols:
+0005 	BDOS            00F0 	BYEBYE          0100 	START           
+
+
+
+No Fatal error(s)
+
+
+          BDO

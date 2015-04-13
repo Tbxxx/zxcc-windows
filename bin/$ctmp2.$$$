@@ -1,0 +1,71 @@
+"18 stdio.h
+[s S1 `*c 1 `i 1 `*c 1 `uc 1 `c 1 ]
+"66
+[v _fclose `(i 0 e ]
+"67
+[v _fflush `(i 0 e ]
+"68
+[v _fgetc `(i 0 e ]
+"69
+[v _ungetc `(i 0 e ]
+"70
+[v _fputc `(i 0 e ]
+"71
+[v _getw `(i 0 e ]
+"72
+[v _putw `(i 0 e ]
+"73
+[v _gets `(*c 0 e ]
+"74
+[v _puts `(i 0 e ]
+"75
+[v _fputs `(i 0 e ]
+"76
+[v _fread `(i 0 e ]
+"77
+[v _fwrite `(i 0 e ]
+"78
+[v _fseek `(i 0 e ]
+"79
+[v _rewind `(i 0 e ]
+"80
+[v _setbuf `(i 0 e ]
+"81
+[v _printf `(i 0 e ]
+"82
+[v _fprintf `(i 0 e ]
+"83
+[v _sprintf `(i 0 e ]
+"84
+[v _scanf `(i 0 e ]
+"85
+[v _fscanf `(i 0 e ]
+"86
+[v _sscanf `(i 0 e ]
+"87
+[v _remove `(i 0 e ]
+"88
+[v _fopen `(*S1 0 e ]
+"89
+[v _freopen `(*S1 0 e ]
+"90
+[v _fdopen `(*S1 0 e ]
+"91
+[v _ftell `(l 0 e ]
+"92
+[v _fgets `(*c 0 e ]
+"93
+[v __bufallo `(*c 0 e ]
+"3 HELLOHT.C
+[v _main `(i 1 e ]
+{
+[e :U _main ]
+[e ( _printf :s 1 ]
+"5
+[e :U 2 ]
+}
+"4
+[a 1 104 101 108 108 111 32 119 111 114 108 100 32 102 114 111 109 32 72 105 116 101 99 104 32 67 10 0 ]
+e ]
+"83
+[v _sprin
